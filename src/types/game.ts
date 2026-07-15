@@ -1,3 +1,9 @@
+export const CloudPatternType = {
+  PATTERN_1: 'PATTERN_1',
+  PATTERN_2: 'PATTERN_2',
+} as const;
+export type CloudPatternType = (typeof CloudPatternType)[keyof typeof CloudPatternType];
+
 export interface CloudIslandConfig {
   id: string;
   centerX: number;
@@ -9,6 +15,8 @@ export interface CloudIslandConfig {
   rotationDirection: 1 | -1;
   width: number;
   height: number;
+  patternType?: CloudPatternType;
+  vortexAngleOffset?: number;
 }
 
 export interface ScoreData {

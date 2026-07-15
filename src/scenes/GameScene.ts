@@ -5,6 +5,7 @@ import { JumpSystem } from '@systems/JumpSystem';
 import { CollisionSystem } from '@systems/CollisionSystem';
 import { PlatformMovementSystem } from '@systems/PlatformMovementSystem';
 import { ScoreSystem } from '@systems/ScoreSystem';
+import { SpawnSystem } from '@systems/SpawnSystem';
 import { AudioManager } from '@managers/AudioManager';
 import { InputManager } from '@managers/InputManager';
 import { SaveManager } from '@managers/SaveManager';
@@ -23,6 +24,7 @@ export class GameScene extends Phaser.Scene {
   private jumpSystem!: JumpSystem;
   private collisionSystem!: CollisionSystem;
   private scoreSystem!: ScoreSystem;
+  private spawnSystem!: SpawnSystem;
 
   // 매니저
   private audioManager!: AudioManager;
@@ -37,7 +39,6 @@ export class GameScene extends Phaser.Scene {
   private isGameOver: boolean = false;
 
   // 착지 위치: 구름 중심에서의 수평 오프셋
-  // 착지 시 계산하고, 탑승 중에는 이 값을 유지해 착지 지점에 고정
   private landingOffsetX: number = 0;
 
   // 충전 표시 그래픽
@@ -75,7 +76,6 @@ export class GameScene extends Phaser.Scene {
 
     this.chargeIndicator = this.add.graphics().setDepth(DEPTH.PLAYER + 1);
 
-    // Phaser 3.87은 씬 재시작 시 user-defined shutdown()을 자동 호출하지 않으므로 명시적으로 등록
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
   }
 
@@ -84,10 +84,14 @@ export class GameScene extends Phaser.Scene {
 
     const dt = delta / 1000;
 
-    // 1. 구름섬 위치 갱신
+    // 1. 구름섬 위치 갱신 (패턴 1: 개별 궤도, 패턴 2: 회오리 그룹)
     this.movementSystem.update(delta);
+    this.spawnSystem.updateVortexPositions(delta);
 
-    // 2. 플레이어 물리 / 위치 처리
+    // 2. 동적 스폰 / 디스폰
+    this.updateSpawn();
+
+    // 3. 플레이어 물리 / 위치 처리
     if (this.player.isOnGround) {
       this.followCurrentCloud();
     } else {
@@ -96,13 +100,13 @@ export class GameScene extends Phaser.Scene {
       this.checkFallDeath();
     }
 
-    // 3. 그래픽 동기화
+    // 4. 그래픽 동기화
     this.player.sync();
 
-    // 4. 충전 표시 업데이트
+    // 5. 충전 표시 업데이트
     this.updateChargeIndicator();
 
-    // 5. 카메라 따라가기
+    // 6. 카메라 따라가기
     this.updateCamera();
   }
 
@@ -136,10 +140,30 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createClouds(): void {
+    // 초기 고정 레이아웃 (패턴 1)
     for (const cfg of INITIAL_CLOUD_LAYOUT) {
       const cloud = new CloudIsland(this, cfg);
       this.clouds.push(cloud);
       this.movementSystem.register(cloud);
+    }
+
+    // 초기 레이아웃 최상단 구름 기준으로 스폰 시스템 시작
+    const topCloud = INITIAL_CLOUD_LAYOUT[INITIAL_CLOUD_LAYOUT.length - 1]!;
+    this.spawnSystem = new SpawnSystem(
+      topCloud.centerY,
+      INITIAL_CLOUD_LAYOUT.length,
+      BASE_WIDTH,
+      BASE_HEIGHT,
+    );
+
+    // 초기 카메라 위치(scrollY=0) 기준 충분한 구름 미리 생성
+    const initialScrollY = 0;
+    let safetyLimit = 30;
+    while (this.spawnSystem.needsSpawn(initialScrollY) && safetyLimit-- > 0) {
+      for (const cloud of this.spawnSystem.spawnNext(this)) {
+        this.clouds.push(cloud);
+        this.movementSystem.register(cloud);
+      }
     }
   }
 
@@ -150,23 +174,20 @@ export class GameScene extends Phaser.Scene {
 
     this.player = new Player(this, sx, sy);
     this.player.isOnGround = true;
-    this.landingOffsetX = 0; // 시작 위치는 구름 중심
+    this.landingOffsetX = 0;
   }
 
   private getPlayerHalfH(): number {
-    return 28; // Player.HALF_H — 인스턴스 없이 상수값 참조
+    return 28;
   }
 
   private setupInput(): void {
     this.inputManager = new InputManager(this);
 
-    // 손가락을 떼는 순간 점프 실행 (충전 시간 전달)
     this.inputManager.onRelease((chargeDuration) => {
       this.handleJump(chargeDuration);
     });
 
-    // ResultScene 버튼의 POINTER_UP이 새 GameScene으로 유입되지 않도록
-    // 씬 전환 직후 짧은 시간 동안 입력을 잠근다
     this.inputManager.disable();
     this.time.delayedCall(300, () => {
       if (!this.isGameOver) this.inputManager.enable();
@@ -191,13 +212,43 @@ export class GameScene extends Phaser.Scene {
     document.addEventListener('visibilitychange', this._onVisibilityChange);
   }
 
+  // ─── 동적 스폰 / 디스폰 ────────────────────────────────
+
+  private updateSpawn(): void {
+    const scrollY = this.cameras.main.scrollY;
+
+    // 플레이어가 위로 올라감에 따라 새 구름 생성 (한 프레임에 최대 2패턴)
+    let spawnsThisFrame = 0;
+    while (this.spawnSystem.needsSpawn(scrollY) && spawnsThisFrame < 2) {
+      for (const cloud of this.spawnSystem.spawnNext(this)) {
+        this.clouds.push(cloud);
+        this.movementSystem.register(cloud);
+      }
+      spawnsThisFrame++;
+    }
+
+    // 카메라 하단 밖으로 벗어난 구름 제거
+    const removed = this.spawnSystem.removeOldClouds(
+      scrollY,
+      this.currentCloudId,
+      this.clouds,
+    );
+    for (const cloud of removed) {
+      this.movementSystem.unregister(cloud);
+      cloud.destroy();
+    }
+    if (removed.length > 0) {
+      const removedIds = new Set(removed.map((c) => c.id));
+      this.clouds = this.clouds.filter((c) => !removedIds.has(c.id));
+    }
+  }
+
   // ─── 게임 루프 ─────────────────────────────────────────
 
   /** 탑승 중인 구름섬과 함께 이동 — 착지 오프셋 유지 */
   private followCurrentCloud(): void {
     const cloud = this.clouds.find((c) => c.id === this.currentCloudId);
     if (!cloud) return;
-    // 구름 중심에서 착지 오프셋만큼 떨어진 위치에 고정
     this.player.x = cloud.x + this.landingOffsetX;
     this.player.y = cloud.topY - this.player.HALF_H;
     this.player.vx = 0;
@@ -240,10 +291,6 @@ export class GameScene extends Phaser.Scene {
 
   // ─── 충전 표시 ─────────────────────────────────────────
 
-  /**
-   * 화면을 누르고 있는 동안 플레이어 주위에 충전 링을 표시한다.
-   * 색상: 파랑(작은 힘) → 노랑(중간) → 주황(최대)
-   */
   private updateChargeIndicator(): void {
     this.chargeIndicator.clear();
 
@@ -263,17 +310,14 @@ export class GameScene extends Phaser.Scene {
 
     const radius = 44;
 
-    // 배경 링 (항상 표시)
     this.chargeIndicator.lineStyle(3, 0xffffff, 0.22);
     this.chargeIndicator.strokeCircle(0, 0, radius);
 
     if (t <= 0) return;
 
-    // 충전 호 (시계 방향, 12시 방향 시작)
     const startAngle = -Math.PI / 2;
     const endAngle = startAngle + Math.PI * 2 * t;
 
-    // t에 따라 색상 변화: 파랑 → 노랑 → 주황
     let color: number;
     if (t < 0.5) {
       color = 0x66ccff;
@@ -291,7 +335,6 @@ export class GameScene extends Phaser.Scene {
 
   // ─── 이벤트 처리 ───────────────────────────────────────
 
-  /** 손가락을 뗐을 때 충전 시간을 받아 점프 실행 */
   private handleJump(chargeDuration: number): void {
     if (!this.player.isOnGround || this.player.isDead) return;
 
@@ -308,24 +351,15 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * 착지 처리.
-   * 착지 순간의 player.x 를 기준으로 구름 중심과의 오프셋을 저장하고
-   * 이후 followCurrentCloud()에서 해당 위치를 유지한다.
-   * (구름 중심으로 자동 이동하지 않음)
-   */
   private handleLand(cloud: CloudIsland): void {
     const prevId = this.currentCloudId;
 
-    // 착지 위치 오프셋 계산
-    // 구름 가장자리를 넘지 않도록 플레이어 폭의 절반만큼 여유를 둠
     const maxOffset = cloud.halfW - this.player.HALF_W * 0.6;
     this.landingOffsetX = Phaser.Math.Clamp(this.player.x - cloud.x, -maxOffset, maxOffset);
 
     this.player.isOnGround = true;
     this.player.vx = 0;
     this.player.vy = 0;
-    // Y만 구름 윗면으로 보정, X는 그대로 유지
     this.player.y = cloud.topY - this.player.HALF_H;
     this.currentCloudId = cloud.id;
 
@@ -363,6 +397,7 @@ export class GameScene extends Phaser.Scene {
     this.hud?.destroy();
     this.inputManager?.destroy();
     this.movementSystem?.clear();
+    this.spawnSystem?.clearAll();
     this.clouds?.forEach((c) => c.destroy());
     this.clouds = [];
     this.player?.destroy();

@@ -24,6 +24,26 @@ export const DEPTH = {
   HUD: 20,
 } as const;
 
+// 동적 구름 스폰 / 디스폰 설정
+export const SPAWN_CONFIG = {
+  // 카메라 상단 기준 이 거리만큼 위에 구름을 미리 생성
+  LOOKAHEAD: 2400,
+  // 카메라 하단 기준 이 거리 아래 구름 제거
+  DESPAWN_BUFFER: 500,
+  // 패턴 1 구름 수직 간격
+  CLOUD_SPACING_MIN: 280,
+  CLOUD_SPACING_MAX: 340,
+  // 패턴 2 회오리 궤도 크기
+  VORTEX_RADIUS_X_MIN: 180,
+  VORTEX_RADIUS_X_MAX: 240,
+  VORTEX_RADIUS_Y_MIN: 80,
+  VORTEX_RADIUS_Y_MAX: 120,
+  // 이 수 이상 패턴 생성 후 패턴 2 허용
+  PATTERN_THRESHOLD: 5,
+  // 패턴 2 배치 실패 시 재시도 횟수
+  MAX_PATTERN_CREATE_RETRY: 10,
+} as const;
+
 // 초기 구름섬 배치 — 프로토타입용 고정 레이아웃
 // world Y 는 0(상단) → 1920(하단). 플레이어는 아래서 위로 올라간다.
 export const INITIAL_CLOUD_LAYOUT = [
