@@ -29,6 +29,11 @@ export const GAMEPLAY = {
   CAMERA_FOLLOW_THRESHOLD: 0.42,
   CAMERA_LERP: 0.09,
 
+  // 직선 이동 (JUMP PATTERN 2)
+  JUMP_STRAIGHT_MIN_SPEED: 900,
+  JUMP_STRAIGHT_MAX_SPEED: 1600,
+  JUMP_STRAIGHT_TIMEOUT_MS: 3500, // 이 시간 내 미착지 시 게임오버
+
   // 점수
   SCORE_PER_JUMP: 1,
 } as const;

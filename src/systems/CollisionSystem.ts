@@ -17,8 +17,9 @@ export class CollisionSystem {
     jumpedFromId: string,
     jumpTime: number,
     now: number,
+    requireFalling = true,
   ): CloudIsland | null {
-    if (player.vy <= 0) return null;
+    if (requireFalling && player.vy <= 0) return null;
 
     const gracePassed = now - jumpTime > GAMEPLAY.JUMP_GRACE_MS;
     const pBottom = player.bottom;

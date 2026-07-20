@@ -10,6 +10,7 @@ import { AudioManager } from '@managers/AudioManager';
 import { InputManager } from '@managers/InputManager';
 import { SaveManager } from '@managers/SaveManager';
 import { GameHud } from '@ui/GameHud';
+import { JumpPatternType } from '@game-types/game';
 import { SCENE_KEYS, DEPTH, EVENTS, INITIAL_CLOUD_LAYOUT } from '@config/constants';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 import { GAMEPLAY } from '@config/gameplayConfig';
@@ -37,12 +38,16 @@ export class GameScene extends Phaser.Scene {
   private jumpedFromId: string = '';
   private jumpTime: number = 0;
   private isGameOver: boolean = false;
+  private jumpPattern: JumpPatternType = JumpPatternType.PATTERN_1;
 
   // 착지 위치: 구름 중심에서의 수평 오프셋
   private landingOffsetX: number = 0;
 
   // 충전 표시 그래픽
   private chargeIndicator!: Phaser.GameObjects.Graphics;
+
+  // 테스트용 패턴 디버그 표시
+  private debugPatternText!: Phaser.GameObjects.Text;
 
   // visibility 핸들러 참조 (shutdown 시 직접 제거)
   private _onVisibilityChange: (() => void) | null = null;
@@ -75,6 +80,11 @@ export class GameScene extends Phaser.Scene {
     this.setupVisibilityPause();
 
     this.chargeIndicator = this.add.graphics().setDepth(DEPTH.PLAYER + 1);
+
+    this.debugPatternText = this.add
+      .text(20, 100, '', { fontSize: '28px', color: '#ffff00', stroke: '#000000', strokeThickness: 4 })
+      .setScrollFactor(0)
+      .setDepth(DEPTH.HUD + 1);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
   }
@@ -256,19 +266,26 @@ export class GameScene extends Phaser.Scene {
   }
 
   private applyPhysics(dt: number): void {
-    this.player.vy += GAMEPLAY.GRAVITY * dt;
-    this.player.vy = Math.min(this.player.vy, GAMEPLAY.MAX_FALL_SPEED);
+    if (this.jumpPattern === JumpPatternType.PATTERN_1) {
+      // 포물선: 중력 적용
+      this.player.vy += GAMEPLAY.GRAVITY * dt;
+      this.player.vy = Math.min(this.player.vy, GAMEPLAY.MAX_FALL_SPEED);
+    }
+    // 직선: 중력 없음, vx/vy 일정 유지
     this.player.x += this.player.vx * dt;
     this.player.y += this.player.vy * dt;
   }
 
   private checkLanding(): void {
+    // 직선 패턴은 상승 중에도 착지 판정 허용
+    const requireFalling = this.jumpPattern === JumpPatternType.PATTERN_1;
     const landed = this.collisionSystem.check(
       this.player,
       this.clouds,
       this.jumpedFromId,
       this.jumpTime,
       this.time.now,
+      requireFalling,
     );
     if (landed !== null) this.handleLand(landed);
   }
@@ -276,6 +293,14 @@ export class GameScene extends Phaser.Scene {
   private checkFallDeath(): void {
     const deathLineY = this.cameras.main.scrollY + BASE_HEIGHT + 220;
     if (this.player.y > deathLineY) {
+      this.triggerGameOver();
+      return;
+    }
+    // 직선 패턴: 미착지 타임아웃
+    if (
+      this.jumpPattern === JumpPatternType.PATTERN_2 &&
+      this.time.now - this.jumpTime > GAMEPLAY.JUMP_STRAIGHT_TIMEOUT_MS
+    ) {
       this.triggerGameOver();
     }
   }
@@ -338,11 +363,18 @@ export class GameScene extends Phaser.Scene {
   private handleJump(chargeDuration: number): void {
     if (!this.player.isOnGround || this.player.isDead) return;
 
+    // TODO: 테스트 완료 후 아래 주석 교체
+    // 랜덤: this.jumpPattern = Phaser.Math.RND.pick([JumpPatternType.PATTERN_1, JumpPatternType.PATTERN_2]);
+    this.jumpPattern = JumpPatternType.PATTERN_2; // 테스트용 강제
+
+    this.debugPatternText.setText(`JUMP: ${this.jumpPattern}`);
+
     const jumped = this.jumpSystem.jump(
       this.player,
       this.clouds,
       this.currentCloudId,
       chargeDuration,
+      this.jumpPattern,
     );
 
     if (jumped) {
@@ -395,6 +427,7 @@ export class GameScene extends Phaser.Scene {
       this._onVisibilityChange = null;
     }
     this.hud?.destroy();
+    this.debugPatternText?.destroy();
     this.inputManager?.destroy();
     this.movementSystem?.clear();
     this.spawnSystem?.clearAll();

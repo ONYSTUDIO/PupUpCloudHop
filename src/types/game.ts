@@ -1,3 +1,9 @@
+export const JumpPatternType = {
+  PATTERN_1: 'PATTERN_1', // 포물선
+  PATTERN_2: 'PATTERN_2', // 대각선 직선
+} as const;
+export type JumpPatternType = (typeof JumpPatternType)[keyof typeof JumpPatternType];
+
 export const CloudPatternType = {
   PATTERN_1: 'PATTERN_1',
   PATTERN_2: 'PATTERN_2',
