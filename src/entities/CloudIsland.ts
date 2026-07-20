@@ -7,6 +7,7 @@ export class CloudIsland {
   private _config: CloudIslandConfig;
   private _currentAngle: number;
   private _patternType: CloudPatternType;
+  private orbitGraphics?: Phaser.GameObjects.Graphics;
 
   readonly vortexAngleOffset: number;
 
@@ -26,6 +27,18 @@ export class CloudIsland {
       const pos = this.calcPosition(this._currentAngle);
       this.x = pos.x;
       this.y = pos.y;
+
+      // 테스트용 궤도 표시선 (PATTERN_1 개별 궤도)
+      const og = scene.add.graphics();
+      og.setDepth(DEPTH.DECOR_CLOUD);
+      og.lineStyle(3.0, 0x88aaff, 0.45);
+      og.strokeEllipse(
+        config.centerX,
+        config.centerY,
+        config.orbitRadiusX * 2,
+        config.orbitRadiusY * 2,
+      );
+      this.orbitGraphics = og;
     }
 
     const g = scene.add.graphics();
@@ -61,6 +74,7 @@ export class CloudIsland {
   get orbitCenterY(): number { return this._config.centerY; }
 
   destroy(): void {
+    this.orbitGraphics?.destroy();
     this.container.destroy();
   }
 

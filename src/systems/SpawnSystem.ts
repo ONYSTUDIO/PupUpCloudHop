@@ -225,7 +225,7 @@ export class SpawnSystem {
     return clouds;
   }
 
-  /** 회오리 패턴 시각 표시 — 중심에 저알파 동심 타원 */
+  /** 테스트용 궤도 표시선 (PATTERN_2 공유 타원 궤도) */
   private drawVortexIndicator(
     scene: Phaser.Scene,
     cx: number,
@@ -235,14 +235,8 @@ export class SpawnSystem {
   ): Phaser.GameObjects.Graphics {
     const g = scene.add.graphics();
     g.setDepth(DEPTH.DECOR_CLOUD);
-
-    const rings = 4;
-    for (let i = 1; i <= rings; i++) {
-      const t = i / rings;
-      g.lineStyle(3 - t * 1.5, 0x88bbff, 0.06 + t * 0.05);
-      g.strokeEllipse(cx, cy, rx * t * 2.4, ry * t * 2.4);
-    }
-
+    g.lineStyle(3.0, 0xff8899, 0.5);
+    g.strokeEllipse(cx, cy, rx * 2, ry * 2);
     return g;
   }
 }
