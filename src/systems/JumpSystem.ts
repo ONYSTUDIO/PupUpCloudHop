@@ -5,75 +5,54 @@ import { JumpPatternType } from '@game-types/game';
 import { GAMEPLAY } from '@config/gameplayConfig';
 
 export class JumpSystem {
+  /**
+   * 충전 시간과 패턴에 따라 플레이어 속도를 적용한다.
+   * @param directionAngle PATTERN_1 전용. 방향 휠 각도(라디안). 기본값: 정 위(-π/2)
+   */
   jump(
     player: Player,
     clouds: CloudIsland[],
     currentCloudId: string,
     chargeDuration: number,
     pattern: JumpPatternType,
+    directionAngle: number = -Math.PI / 2,
   ): boolean {
     if (!player.isOnGround || player.isDead) return false;
 
     player.isOnGround = false;
-    const target = this.findTarget(player, clouds, currentCloudId);
 
     if (pattern === JumpPatternType.PATTERN_1) {
-      this.applyParabolicVelocity(player, target, chargeDuration);
+      // 방향 휠이 지정한 각도로 직선 이동
+      this.applyDirectionalVelocity(player, directionAngle, chargeDuration);
     } else {
+      // 가장 가까운 구름으로 자동 조준 직선 이동
+      const target = this.findTarget(player, clouds, currentCloudId);
       this.applyStraightVelocity(player, target, chargeDuration);
     }
 
     return true;
   }
 
-  // ─── 패턴 1: 포물선 ────────────────────────────────────
+  // ─── 패턴 1: 방향 휠 직선 ──────────────────────────────
 
-  private applyParabolicVelocity(
+  private applyDirectionalVelocity(
     player: Player,
-    target: CloudIsland | null,
+    angle: number,
     chargeDuration: number,
   ): void {
-    const { vy, vxMax } = this.calcParabolicVelocities(chargeDuration);
-    player.vy = vy;
-    if (target !== null) {
-      const dx = target.x - player.x;
-      player.vx = Phaser.Math.Clamp(dx * 1.6, -vxMax, vxMax);
-    } else {
-      player.vx = 0;
-    }
+    const speed = this.calcSpeed(chargeDuration);
+    player.vx = Math.cos(angle) * speed;
+    player.vy = Math.sin(angle) * speed;
   }
 
-  calcParabolicVelocities(chargeDuration: number): { vy: number; vxMax: number } {
-    const t = Phaser.Math.Clamp(
-      (chargeDuration - GAMEPLAY.JUMP_CHARGE_MIN_MS) /
-        (GAMEPLAY.JUMP_CHARGE_MAX_MS - GAMEPLAY.JUMP_CHARGE_MIN_MS),
-      0,
-      1,
-    );
-    const vyT = Math.min(t / GAMEPLAY.JUMP_VY_RAMP_END, 1);
-    const vyMag = Phaser.Math.Linear(GAMEPLAY.JUMP_MIN_VY_MAG, GAMEPLAY.JUMP_MAX_VY_MAG, vyT);
-    const vxMax = Phaser.Math.Linear(GAMEPLAY.JUMP_MIN_VX, GAMEPLAY.JUMP_MAX_VX, t);
-    return { vy: -vyMag, vxMax };
-  }
-
-  // ─── 패턴 2: 대각선 직선 ───────────────────────────────
+  // ─── 패턴 2: 자동 조준 직선 ────────────────────────────
 
   private applyStraightVelocity(
     player: Player,
     target: CloudIsland | null,
     chargeDuration: number,
   ): void {
-    const t = Phaser.Math.Clamp(
-      (chargeDuration - GAMEPLAY.JUMP_CHARGE_MIN_MS) /
-        (GAMEPLAY.JUMP_CHARGE_MAX_MS - GAMEPLAY.JUMP_CHARGE_MIN_MS),
-      0,
-      1,
-    );
-    const speed = Phaser.Math.Linear(
-      GAMEPLAY.JUMP_STRAIGHT_MIN_SPEED,
-      GAMEPLAY.JUMP_STRAIGHT_MAX_SPEED,
-      t,
-    );
+    const speed = this.calcSpeed(chargeDuration);
 
     if (target !== null) {
       const dx = target.x - player.x;
@@ -82,17 +61,25 @@ export class JumpSystem {
       if (dist > 0) {
         player.vx = (dx / dist) * speed;
         player.vy = (dy / dist) * speed;
-      } else {
-        player.vx = 0;
-        player.vy = -speed;
+        return;
       }
-    } else {
-      player.vx = 0;
-      player.vy = -speed;
     }
+
+    player.vx = 0;
+    player.vy = -speed;
   }
 
   // ─── 공통 유틸 ─────────────────────────────────────────
+
+  private calcSpeed(chargeDuration: number): number {
+    const t = Phaser.Math.Clamp(
+      (chargeDuration - GAMEPLAY.JUMP_CHARGE_MIN_MS) /
+        (GAMEPLAY.JUMP_CHARGE_MAX_MS - GAMEPLAY.JUMP_CHARGE_MIN_MS),
+      0,
+      1,
+    );
+    return Phaser.Math.Linear(GAMEPLAY.JUMP_STRAIGHT_MIN_SPEED, GAMEPLAY.JUMP_STRAIGHT_MAX_SPEED, t);
+  }
 
   findTarget(player: Player, clouds: CloudIsland[], currentCloudId: string): CloudIsland | null {
     const others = clouds.filter((c) => c.id !== currentCloudId);
