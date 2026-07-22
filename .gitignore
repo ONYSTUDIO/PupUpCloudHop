@@ -6,3 +6,4 @@ ios/
 *.local
 .env
 .env.*
+.claude/
