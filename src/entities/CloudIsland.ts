@@ -33,7 +33,7 @@ export class CloudIsland {
     const h = config.height;
 
     // 착지 영역 사전 계산 (컨테이너 중심 = 구름 레이어 중심)
-    const islandW = w * 0.88;
+    const islandW = w;
     const islandH = h * 0.85;
     const islandCenterLocalY = -(h * 0.5 + islandH * 0.5);
 
