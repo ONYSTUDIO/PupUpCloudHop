@@ -60,6 +60,7 @@ export class GameScene extends Phaser.Scene {
   private jumpPattern: JumpPatternType = JumpPatternType.PATTERN_1;
   private landingOffsetX: number = 0;
   private showDirectionArrow: boolean = true;
+  private _physicsGravity: boolean = false; // 풍선 충돌 후 중력 낙하 활성화
 
   private _onVisibilityChange: (() => void) | null = null;
 
@@ -69,6 +70,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.isGameOver = false;
+    this._physicsGravity = false;
     this.clouds = [];
     this.currentCloudId = INITIAL_CLOUD_LAYOUT[0].id;
     this.jumpedFromId = '';
@@ -321,13 +323,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   private applyPhysics(dt: number): void {
-    // 두 패턴 모두 직선 이동 — 중력 없음
+    if (this._physicsGravity) {
+      // 풍선 충돌 후: 중력 가속 (MAX_FALL_SPEED 상한)
+      this.player.vy = Math.min(
+        this.player.vy + GAMEPLAY.GRAVITY * dt,
+        GAMEPLAY.MAX_FALL_SPEED,
+      );
+    }
     this.player.x += this.player.vx * dt;
     this.player.y += this.player.vy * dt;
   }
 
   private checkLanding(): void {
-    // 직선 이동이므로 상승 중에도 착지 판정 허용
+    if (this.player.isDead) return;
+
+    // 1순위: 섬(잔디) 착지 — 성공
     const landed = this.collisionSystem.check(
       this.player,
       this.clouds,
@@ -336,7 +346,22 @@ export class GameScene extends Phaser.Scene {
       this.time.now,
       false,
     );
-    if (landed !== null) this.handleLand(landed);
+    if (landed !== null) {
+      this.handleLand(landed);
+      return;
+    }
+
+    // 2순위: 구름·풍선 충돌 — 착지 실패, 낙하 후 게임 오버
+    const danger = this.collisionSystem.checkDanger(
+      this.player,
+      this.clouds,
+      this.jumpedFromId,
+      this.jumpTime,
+      this.time.now,
+    );
+    if (danger !== null) {
+      this.handleDangerHit();
+    }
   }
 
   private checkFallDeath(): void {
@@ -346,11 +371,12 @@ export class GameScene extends Phaser.Scene {
     const offRight  = this.player.x > BASE_WIDTH + 60;
 
     if (offBottom || offLeft || offRight) {
-      this.triggerGameOver();
+      // 물리 낙하 중이면 화면 이탈 즉시 팝업, 아니면 기존 1초 딜레이
+      this.triggerGameOver(this._physicsGravity ? 0 : 1000);
       return;
     }
-    // 미착지 타임아웃
-    if (this.time.now - this.jumpTime > GAMEPLAY.JUMP_STRAIGHT_TIMEOUT_MS) {
+    // 타임아웃 — 물리 낙하 중엔 무시
+    if (!this.player.isDead && this.time.now - this.jumpTime > GAMEPLAY.JUMP_STRAIGHT_TIMEOUT_MS) {
       this.triggerGameOver();
     }
   }
@@ -501,7 +527,32 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private triggerGameOver(): void {
+  /** 풍선 충돌: 0.3초 제자리 대기 → 살짝 위로 팝 → 중력 낙하 → 화면 이탈 시 팝업 */
+  private handleDangerHit(): void {
+    if (this.isGameOver || this.player.isDead) return;
+
+    this.player.isDead = true;
+    this.player.isOnGround = false;
+
+    // 충돌 당시 수평 속도 보존 (0.3초 후 낙하 방향에 반영)
+    const savedVx = this.player.vx * 0.6;
+
+    // 제자리 정지
+    this.player.vx = 0;
+    this.player.vy = 0;
+
+    this.inputManager.disable();
+    this.audioManager.stopBgm();
+
+    // 0.3초 대기 후 살짝 위로 튀어 오르며 중력 낙하 시작
+    this.time.delayedCall(300, () => {
+      this.player.vx = savedVx;
+      this.player.vy = -320; // 위로 살짝 팝
+      this._physicsGravity = true;
+    });
+  }
+
+  private triggerGameOver(delay: number = 1000): void {
     if (this.isGameOver) return;
     this.isGameOver = true;
 
@@ -514,7 +565,7 @@ export class GameScene extends Phaser.Scene {
 
     this.events.emit(EVENTS.GAME_OVER);
 
-    this.time.delayedCall(1000, () => {
+    this.time.delayedCall(delay, () => {
       this.scene.start(SCENE_KEYS.RESULT, { score: { ...score }, isNewBest });
     });
   }

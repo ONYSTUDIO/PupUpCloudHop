@@ -83,13 +83,30 @@ export class CloudIsland {
 
   get id(): string { return this._config.id; }
 
-  // 착지 영역 — 섬(잔디) 표면 기준
+  // ── 착지 영역 — 섬(잔디) 표면 기준 ────────────────────────
   get topY(): number  { return this.y + this._islandLocalTopY; }
   get halfW(): number { return this._islandHalfW; }
   get leftX(): number { return this.x - this._islandHalfW; }
   get rightX(): number { return this.x + this._islandHalfW; }
 
-  // 내부 / 호환용
+  // ── 위험 구역 — 구름 레이어 ────────────────────────────────
+  // 구름 본체 AABB (섬 착지 판정보다 낮은 위치)
+  get cloudBodyTopY(): number    { return this.y - this._config.height * 0.5; }
+  get cloudBodyBottomY(): number { return this.y + this._config.height * 0.5; }
+  get cloudBodyHalfW(): number   { return this._config.width * 0.5; }
+
+  // ── 위험 구역 — 풍선 레이어 ────────────────────────────────
+  // 풍선 끈 시작점 ~ 풍선 하단 꼭지 (drawCloudIsland 파라미터와 동기화)
+  get balloonZoneTopY(): number {
+    return this.y + this._config.height * 0.44;
+  }
+  get balloonZoneBottomY(): number {
+    const br = this._config.width * 0.095;
+    return this.balloonZoneTopY + br * 3.6; // balloonCY + balloonR * (2.15 + 1.48)
+  }
+  get balloonZoneHalfW(): number { return this._config.width * 0.305; } // 3개 풍선 전체 너비
+
+  // ── 내부 / 호환용 ────────────────────────────────────────────
   get halfH(): number { return this._config.height / 2; }
   get orbitCenterY(): number { return this._config.centerY; }
 
