@@ -12,6 +12,7 @@ export type CloudPatternType = (typeof CloudPatternType)[keyof typeof CloudPatte
 
 export const ObstacleType = {
   BIRD_FLOCK: 'BIRD_FLOCK',
+  LIGHTNING_STORM: 'LIGHTNING_STORM',
 } as const;
 export type ObstacleType = (typeof ObstacleType)[keyof typeof ObstacleType];
 

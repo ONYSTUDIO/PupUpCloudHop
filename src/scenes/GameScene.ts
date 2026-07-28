@@ -116,9 +116,20 @@ export class GameScene extends Phaser.Scene {
     this.movementSystem.update(delta);
     this.spawnSystem.updateVortexPositions(delta);
 
-    // 2. 장애물 업데이트 + 새떼-구름 충돌 판정
-    this.obstacleSystem.update(delta, this.time.now, this.cameras.main.scrollY);
+    // 2. 장애물 업데이트
+    const scrollY = this.cameras.main.scrollY;
+    this.obstacleSystem.update(delta, this.time.now, scrollY);
     this.checkObstacleCollisions();
+
+    const currentCloud = this.player.isOnGround
+      ? (this.clouds.find((c) => c.id === this.currentCloudId) ?? null)
+      : null;
+    const stormHitId = this.obstacleSystem.updateStorm(
+      delta, this.time.now, scrollY, currentCloud,
+    );
+    if (stormHitId !== null) {
+      this.clouds.find((c) => c.id === stormHitId)?.startFalling();
+    }
 
     // 3. 동적 스폰 / 디스폰
     this.updateSpawn();
@@ -294,7 +305,7 @@ export class GameScene extends Phaser.Scene {
   // ─── 동적 스폰 / 디스폰 ────────────────────────────────
 
   private updateSpawn(): void {
-    const scrollY = this.cameras.main.scrollY;
+    const scrollY = this.cameras.main.scrollY; // update() 루프의 scrollY와 별개 — 이 메서드 내부 지역 변수
 
     let spawnsThisFrame = 0;
     while (this.spawnSystem.needsSpawn(scrollY) && spawnsThisFrame < 2) {
