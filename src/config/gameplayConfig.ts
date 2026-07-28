@@ -36,6 +36,9 @@ export const GAMEPLAY = {
 
   // 점수
   SCORE_PER_JUMP: 1,
+
+  // 구름섬 낙하 (새떼 충돌 시)
+  CLOUD_FALL_GRAVITY: 2400,
 } as const;
 
 export const ANIM = {

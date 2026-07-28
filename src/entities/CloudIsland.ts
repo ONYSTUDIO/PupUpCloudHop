@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { CloudPatternType, type CloudIslandConfig } from '@game-types/game';
 import { DEPTH } from '@config/constants';
+import { GAMEPLAY } from '@config/gameplayConfig';
 
 export class CloudIsland {
   private container: Phaser.GameObjects.Container;
@@ -12,6 +13,10 @@ export class CloudIsland {
   // 섬 착지 영역 (컨테이너 로컬 좌표 기준)
   private _islandLocalTopY: number = 0;
   private _islandHalfW: number = 0;
+
+  // 낙하 상태 (새떼 충돌 시)
+  private _isFalling: boolean = false;
+  private _fallVy: number = 0;
 
   readonly vortexAngleOffset: number;
 
@@ -65,6 +70,12 @@ export class CloudIsland {
   }
 
   update(delta: number): void {
+    if (this._isFalling) {
+      this._fallVy += GAMEPLAY.CLOUD_FALL_GRAVITY * (delta / 1000);
+      this.y += this._fallVy * (delta / 1000);
+      this.container.setPosition(this.x, this.y);
+      return;
+    }
     if (this._patternType === CloudPatternType.PATTERN_2) return;
 
     this._currentAngle +=
@@ -73,6 +84,13 @@ export class CloudIsland {
     this.x = pos.x;
     this.y = pos.y;
     this.container.setPosition(this.x, this.y);
+  }
+
+  get isFalling(): boolean { return this._isFalling; }
+
+  startFalling(): void {
+    this._isFalling = true;
+    this._fallVy = 0;
   }
 
   setWorldXY(x: number, y: number): void {

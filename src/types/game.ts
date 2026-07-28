@@ -10,6 +10,11 @@ export const CloudPatternType = {
 } as const;
 export type CloudPatternType = (typeof CloudPatternType)[keyof typeof CloudPatternType];
 
+export const ObstacleType = {
+  BIRD_FLOCK: 'BIRD_FLOCK',
+} as const;
+export type ObstacleType = (typeof ObstacleType)[keyof typeof ObstacleType];
+
 export interface CloudIslandConfig {
   id: string;
   centerX: number;

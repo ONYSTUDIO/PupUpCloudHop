@@ -1,5 +1,6 @@
 import type { Player } from '@entities/Player';
 import type { CloudIsland } from '@entities/CloudIsland';
+import type { BirdFlock } from '@entities/Obstacle';
 import { GAMEPLAY } from '@config/gameplayConfig';
 
 export class CollisionSystem {
@@ -65,6 +66,31 @@ export class CollisionSystem {
       if (bHitX && bHitY) return cloud;
     }
 
+    return null;
+  }
+
+  /** 새떼가 구름섬의 풍선 영역에 닿는지 판정 — 이미 낙하 중인 구름은 제외 */
+  checkBirdFlockCloud(
+    flocks: BirdFlock[],
+    clouds: CloudIsland[],
+  ): { flock: BirdFlock; cloud: CloudIsland } | null {
+    for (const flock of flocks) {
+      const fLeft   = flock.x - flock.halfW;
+      const fRight  = flock.x + flock.halfW;
+      const fTop    = flock.y - flock.halfH;
+      const fBottom = flock.y + flock.halfH;
+
+      for (const cloud of clouds) {
+        if (cloud.isFalling) continue;
+
+        const hitX = fLeft  < cloud.x + cloud.balloonZoneHalfW &&
+                     fRight > cloud.x - cloud.balloonZoneHalfW;
+        const hitY = fBottom > cloud.balloonZoneTopY &&
+                     fTop    < cloud.balloonZoneBottomY;
+
+        if (hitX && hitY) return { flock, cloud };
+      }
+    }
     return null;
   }
 }

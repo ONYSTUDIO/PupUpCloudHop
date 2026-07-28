@@ -54,6 +54,7 @@ export class SpawnSystem {
     for (const group of this.vortexGroups) {
       group.angle += group.speed * group.direction * dt;
       for (const cloud of group.clouds) {
+        if (cloud.isFalling) continue;
         cloud.setWorldXY(
           group.centerX + Math.cos(group.angle + cloud.vortexAngleOffset) * group.radiusX,
           group.centerY + Math.sin(group.angle + cloud.vortexAngleOffset) * group.radiusY,

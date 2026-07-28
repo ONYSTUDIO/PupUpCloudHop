@@ -6,13 +6,14 @@ import { CollisionSystem } from '@systems/CollisionSystem';
 import { PlatformMovementSystem } from '@systems/PlatformMovementSystem';
 import { ScoreSystem } from '@systems/ScoreSystem';
 import { SpawnSystem } from '@systems/SpawnSystem';
+import { ObstacleSystem } from '@systems/ObstacleSystem';
 import { AudioManager } from '@managers/AudioManager';
 import { InputManager } from '@managers/InputManager';
 import { SaveManager } from '@managers/SaveManager';
 import { GameHud } from '@ui/GameHud';
 import { DirectionWheel } from '@ui/DirectionWheel';
 import { JumpPatternType } from '@game-types/game';
-import { SCENE_KEYS, DEPTH, EVENTS, INITIAL_CLOUD_LAYOUT } from '@config/constants';
+import { SCENE_KEYS, DEPTH, EVENTS, INITIAL_CLOUD_LAYOUT, SPAWN_CONFIG } from '@config/constants';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 import { GAMEPLAY } from '@config/gameplayConfig';
 
@@ -36,6 +37,7 @@ export class GameScene extends Phaser.Scene {
   private collisionSystem!: CollisionSystem;
   private scoreSystem!: ScoreSystem;
   private spawnSystem!: SpawnSystem;
+  private obstacleSystem!: ObstacleSystem;
 
   // 매니저 / UI
   private audioManager!: AudioManager;
@@ -83,6 +85,7 @@ export class GameScene extends Phaser.Scene {
     this.jumpSystem = new JumpSystem();
     this.collisionSystem = new CollisionSystem();
     this.scoreSystem = new ScoreSystem(this, this.saveManager.getBestScore());
+    this.obstacleSystem = new ObstacleSystem(this);
     this.hud = new GameHud(this, this.saveManager.getBestScore());
 
     this.setupBackground();
@@ -113,10 +116,14 @@ export class GameScene extends Phaser.Scene {
     this.movementSystem.update(delta);
     this.spawnSystem.updateVortexPositions(delta);
 
-    // 2. 동적 스폰 / 디스폰
+    // 2. 장애물 업데이트 + 새떼-구름 충돌 판정
+    this.obstacleSystem.update(delta, this.time.now, this.cameras.main.scrollY);
+    this.checkObstacleCollisions();
+
+    // 3. 동적 스폰 / 디스폰
     this.updateSpawn();
 
-    // 3. 플레이어 물리 / 위치 처리
+    // 4. 플레이어 물리 / 위치 처리
     if (this.player.isOnGround) {
       this.followCurrentCloud();
     } else {
@@ -125,19 +132,19 @@ export class GameScene extends Phaser.Scene {
       this.checkFallDeath();
     }
 
-    // 4. 그래픽 동기화
+    // 5. 그래픽 동기화
     this.player.sync();
 
-    // 5. 충전 표시 (PATTERN_1 전용)
+    // 6. 충전 표시 (PATTERN_1 전용)
     this.updateChargeIndicator();
 
-    // 6. 방향 화살표
+    // 7. 방향 화살표
     this.updateDirectionArrow();
 
-    // 7. JUMP 버튼 시각 상태
+    // 8. JUMP 버튼 시각 상태
     this.updateJumpButton();
 
-    // 8. 카메라
+    // 9. 카메라
     this.updateCamera();
   }
 
@@ -309,6 +316,32 @@ export class GameScene extends Phaser.Scene {
       const removedIds = new Set(removed.map((c) => c.id));
       this.clouds = this.clouds.filter((c) => !removedIds.has(c.id));
     }
+
+    // 낙하 중인 구름(비탑승) — orbitCenterY 기반 제거 안 되므로 실제 Y로 별도 제거
+    const despawnY = scrollY + BASE_HEIGHT + SPAWN_CONFIG.DESPAWN_BUFFER;
+    const fallenOff = this.clouds.filter(
+      (c) => c.isFalling && c.id !== this.currentCloudId && c.y > despawnY,
+    );
+    for (const cloud of fallenOff) {
+      this.movementSystem.unregister(cloud);
+      cloud.destroy();
+    }
+    if (fallenOff.length > 0) {
+      const fallenIds = new Set(fallenOff.map((c) => c.id));
+      this.clouds = this.clouds.filter((c) => !fallenIds.has(c.id));
+    }
+  }
+
+  // ─── 장애물 충돌 ───────────────────────────────────────
+
+  private checkObstacleCollisions(): void {
+    const hit = this.collisionSystem.checkBirdFlockCloud(
+      this.obstacleSystem.getFlocks(),
+      this.clouds,
+    );
+    if (hit !== null) {
+      hit.cloud.startFalling();
+    }
   }
 
   // ─── 게임 루프 ─────────────────────────────────────────
@@ -320,6 +353,14 @@ export class GameScene extends Phaser.Scene {
     this.player.y = cloud.topY - this.player.HALF_H;
     this.player.vx = 0;
     this.player.vy = 0;
+
+    // 탑승 중인 구름이 새떼에 맞아 낙하 중 → 함께 추락 → 화면 이탈 시 게임 오버
+    if (cloud.isFalling) {
+      const scrollY = this.cameras.main.scrollY;
+      if (cloud.y > scrollY + BASE_HEIGHT + 60) {
+        this.triggerGameOver(0);
+      }
+    }
   }
 
   private applyPhysics(dt: number): void {
@@ -583,6 +624,7 @@ export class GameScene extends Phaser.Scene {
     this.inputManager?.destroy();
     this.movementSystem?.clear();
     this.spawnSystem?.clearAll();
+    this.obstacleSystem?.clearAll();
     this.clouds?.forEach((c) => c.destroy());
     this.clouds = [];
     this.player?.destroy();
