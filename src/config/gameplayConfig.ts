@@ -4,7 +4,7 @@ export const GAMEPLAY = {
   MAX_FALL_SPEED: 1800,
 
   // 착지 허용 범위 (픽셀)
-  LAND_TOLERANCE_Y: 28,
+  LAND_TOLERANCE_Y: 38,
 
   // 점프 직후 출발 구름 무시 시간 (ms)
   JUMP_GRACE_MS: 280,

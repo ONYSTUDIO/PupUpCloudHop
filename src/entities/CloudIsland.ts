@@ -33,14 +33,14 @@ export class CloudIsland {
     const h = config.height;
 
     // 착지 영역 사전 계산 (컨테이너 중심 = 구름 레이어 중심)
-    const islandW = w * 0.72;
+    const islandW = w * 0.88;
     const islandH = h * 0.85;
     const islandCenterLocalY = -(h * 0.5 + islandH * 0.5);
 
     // 잔디 타원 중심에서 27% 위 = 플레이어가 서는 표면
     this._islandLocalTopY = islandCenterLocalY - islandH * 0.27;
-    // 착지 가능 너비 = 섬 시각 폭의 46%
-    this._islandHalfW = islandW * 0.46;
+    // 착지 가능 너비 = 섬 시각 폭의 50% (잔디 타원 끝단과 일치)
+    this._islandHalfW = islandW * 0.50;
 
     if (this._patternType === CloudPatternType.PATTERN_2) {
       this.x = config.centerX;
@@ -152,7 +152,7 @@ export class CloudIsland {
    * 구름·풍선 위치에 닿으면 충돌 미감지 → 낙하 → 게임 오버.
    */
   private drawCloudIsland(g: Phaser.GameObjects.Graphics, w: number, h: number): void {
-    const islandW  = w * 0.72;
+    const islandW  = w * 0.88;
     const islandH  = h * 0.85;
     const islandCY = -(h * 0.5 + islandH * 0.5); // 섬 중심 로컬 Y
 
@@ -223,9 +223,9 @@ export class CloudIsland {
     // 흙 측면 (직사각형 → 깔끔한 절벽 경계)
     g.fillStyle(0x8c5c38, 1);
     g.fillRect(
-      -islandW * 0.46,
+      -islandW * 0.50,
       islandCY - islandH * 0.04,
-      islandW * 0.92,
+      islandW * 1.00,
       islandH * 0.36,
     );
 
