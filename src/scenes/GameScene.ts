@@ -85,7 +85,7 @@ export class GameScene extends Phaser.Scene {
     this.jumpSystem = new JumpSystem();
     this.collisionSystem = new CollisionSystem();
     this.scoreSystem = new ScoreSystem(this, this.saveManager.getBestScore());
-    this.obstacleSystem = new ObstacleSystem(this);
+    this.obstacleSystem = new ObstacleSystem(this, this.time.now);
     this.hud = new GameHud(this, this.saveManager.getBestScore());
 
     this.setupBackground();

@@ -8,13 +8,21 @@ import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 export class ObstacleSystem {
   // ── 새떼 ────────────────────────────────────────────────
   private flocks: BirdFlock[] = [];
-  private nextFlockTime: number = OBSTACLE_CONFIG.FIRST_SPAWN_DELAY_MS;
+  private nextFlockTime: number;
 
   // ── 번개 폭풍 ───────────────────────────────────────────
   private storm: LightningStorm | null = null;
-  private nextStormTime: number = OBSTACLE_CONFIG.STORM_FIRST_SPAWN_DELAY_MS;
+  private nextStormTime: number;
 
-  constructor(private readonly scene: Phaser.Scene) {}
+  /**
+   * @param now - 씬 생성 시점의 this.time.now
+   *   Phaser 시각은 게임 전체 누적이므로 절대값(DELAY_MS)으로 비교하면
+   *   재시작 시 즉시 스폰되는 버그가 발생. 상대값(now + DELAY)으로 설정.
+   */
+  constructor(private readonly scene: Phaser.Scene, now: number) {
+    this.nextFlockTime = now + OBSTACLE_CONFIG.FIRST_SPAWN_DELAY_MS;
+    this.nextStormTime = now + OBSTACLE_CONFIG.STORM_FIRST_SPAWN_DELAY_MS;
+  }
 
   // ── 새떼 업데이트 ────────────────────────────────────────
 
