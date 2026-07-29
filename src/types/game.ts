@@ -1,3 +1,9 @@
+export const ObstacleType = {
+  BIRD_FLOCK: 'BIRD_FLOCK',
+  LIGHTNING_STORM: 'LIGHTNING_STORM',
+} as const;
+export type ObstacleType = (typeof ObstacleType)[keyof typeof ObstacleType];
+
 export const JumpPatternType = {
   PATTERN_1: 'PATTERN_1', // auto-aim 직선
   PATTERN_2: 'PATTERN_2', // 드래그 휠 방향
