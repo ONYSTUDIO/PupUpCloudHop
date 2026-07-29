@@ -5,10 +5,6 @@ import { JumpPatternType } from '@game-types/game';
 import { GAMEPLAY } from '@config/gameplayConfig';
 
 export class JumpSystem {
-  /**
-   * 충전 시간과 패턴에 따라 플레이어 속도를 적용한다.
-   * @param directionAngle PATTERN_1 전용. 방향 휠 각도(라디안). 기본값: 정 위(-π/2)
-   */
   jump(
     player: Player,
     clouds: CloudIsland[],
@@ -21,11 +17,13 @@ export class JumpSystem {
 
     player.isOnGround = false;
 
-    if (pattern === JumpPatternType.PATTERN_2 || pattern === JumpPatternType.PATTERN_3) {
-      // 방향 휠 각도로 직선 이동 (드래그 or 진자 타이밍)
+    if (pattern === JumpPatternType.PATTERN_1) {
+      // 포물선: 드래그 휠 방향 + VX/VY 분리 계산 + 비행 중 중력 적용 (GameScene에서 처리)
+      this.applyParabolicVelocity(player, directionAngle, chargeDuration);
+    } else if (pattern === JumpPatternType.PATTERN_2 || pattern === JumpPatternType.PATTERN_3) {
+      // 직선: 드래그 휠 or 진자 타이밍 방향 + 단일 속도
       this.applyDirectionalVelocity(player, directionAngle, chargeDuration);
     } else {
-      // PATTERN_1: 가장 가까운 구름으로 자동 조준
       const target = this.findTarget(player, clouds, currentCloudId);
       this.applyStraightVelocity(player, target, chargeDuration);
     }
@@ -33,26 +31,47 @@ export class JumpSystem {
     return true;
   }
 
-  // ─── 패턴 1: 방향 휠 직선 ──────────────────────────────
+  // ─── 패턴 1: 포물선 ────────────────────────────────────────
+  // VY(높이): 충전량에 비례해 선형 증가, 항상 위 방향 고정.
+  //   → 게이지를 많이 채울수록 무조건 더 높이 올라감 (최대 ~2층).
+  // VX(좌우): 드래그 각도의 수평 성분 × 충전량.
+  //   → 각도가 좌우로 기울수록 수평 이동, 정 위(−π/2)면 VX = 0.
+  // GameScene이 비행 중 중력을 적용해 포물선 궤도를 만든다.
 
-  private applyDirectionalVelocity(
-    player: Player,
-    angle: number,
-    chargeDuration: number,
-  ): void {
-    const speed = this.calcSpeed(chargeDuration);
+  private applyParabolicVelocity(player: Player, angle: number, chargeDuration: number): void {
+    const t = Phaser.Math.Clamp(
+      (chargeDuration - GAMEPLAY.JUMP_CHARGE_MIN_MS) /
+        (GAMEPLAY.JUMP_CHARGE_MAX_MS - GAMEPLAY.JUMP_CHARGE_MIN_MS),
+      0,
+      1,
+    );
+
+    // VY: 충전량 전 구간에서 선형 증가 (상한 = JUMP_MAX_VY_MAG ≈ 2층 높이)
+    const vyMag = Phaser.Math.Linear(GAMEPLAY.JUMP_MIN_VY_MAG, GAMEPLAY.JUMP_MAX_VY_MAG, t);
+
+    // VX: 각도 수평 성분 × 충전량 (cos(−π/2) = 0 → 정 위면 좌우 이동 없음)
+    const vxMag = Phaser.Math.Linear(GAMEPLAY.JUMP_MIN_VX, GAMEPLAY.JUMP_MAX_VX, t);
+
+    player.vy = -vyMag;                   // 항상 위 방향 (높이는 충전량만이 결정)
+    player.vx = Math.cos(angle) * vxMag;  // 좌우는 휠 각도로 결정
+  }
+
+  // ─── 패턴 2·3: 방향 휠 직선 ────────────────────────────────
+
+  private applyDirectionalVelocity(player: Player, angle: number, chargeDuration: number): void {
+    const speed = this.calcStraightSpeed(chargeDuration);
     player.vx = Math.cos(angle) * speed;
     player.vy = Math.sin(angle) * speed;
   }
 
-  // ─── 패턴 2: 자동 조준 직선 ────────────────────────────
+  // ─── auto-aim 직선 ──────────────────────────────────────────
 
   private applyStraightVelocity(
     player: Player,
     target: CloudIsland | null,
     chargeDuration: number,
   ): void {
-    const speed = this.calcSpeed(chargeDuration);
+    const speed = this.calcStraightSpeed(chargeDuration);
 
     if (target !== null) {
       const dx = target.x - player.x;
@@ -69,9 +88,9 @@ export class JumpSystem {
     player.vy = -speed;
   }
 
-  // ─── 공통 유틸 ─────────────────────────────────────────
+  // ─── 공통 유틸 ─────────────────────────────────────────────
 
-  private calcSpeed(chargeDuration: number): number {
+  private calcStraightSpeed(chargeDuration: number): number {
     const t = Phaser.Math.Clamp(
       (chargeDuration - GAMEPLAY.JUMP_CHARGE_MIN_MS) /
         (GAMEPLAY.JUMP_CHARGE_MAX_MS - GAMEPLAY.JUMP_CHARGE_MIN_MS),

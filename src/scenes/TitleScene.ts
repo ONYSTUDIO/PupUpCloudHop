@@ -5,18 +5,20 @@ import { SaveManager } from '@managers/SaveManager';
 import { JumpPatternType } from '@game-types/game';
 
 const SELECTABLE_PATTERNS: JumpPatternType[] = [
+  JumpPatternType.PATTERN_1,
   JumpPatternType.PATTERN_2,
   JumpPatternType.PATTERN_3,
 ];
 
 const PATTERN_NAMES: Record<string, string> = {
+  [JumpPatternType.PATTERN_1]: '패턴 1  포물선',
   [JumpPatternType.PATTERN_2]: '패턴 2  드래그',
   [JumpPatternType.PATTERN_3]: '패턴 3  타이밍',
 };
 
 export class TitleScene extends Phaser.Scene {
   private saveManager!: SaveManager;
-  private selectedPattern: JumpPatternType = JumpPatternType.PATTERN_3;
+  private selectedPattern: JumpPatternType = JumpPatternType.PATTERN_1;
   private patternLabel!: Phaser.GameObjects.Text;
 
   constructor() {

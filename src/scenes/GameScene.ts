@@ -57,7 +57,8 @@ export class GameScene extends Phaser.Scene {
   private jumpPattern: JumpPatternType = JumpPatternType.PATTERN_3;
   private landingOffsetX: number = 0;
   private showDirectionArrow: boolean = true;
-  private _physicsGravity: boolean = false; // 풍선 충돌 후 중력 낙하 활성화
+  private _physicsGravity: boolean = false;  // 풍선 충돌 후 중력 낙하
+  private _parabolicJump: boolean = false;    // 패턴 1 비행 중 중력
   private capturedAngle: number = -Math.PI / 2; // 패턴 3 전용: 버튼 누른 순간 각도
 
   private _onVisibilityChange: (() => void) | null = null;
@@ -70,6 +71,7 @@ export class GameScene extends Phaser.Scene {
     this.jumpPattern = data?.pattern ?? JumpPatternType.PATTERN_3;
     this.isGameOver = false;
     this._physicsGravity = false;
+    this._parabolicJump = false;
     this.clouds = [];
     this.currentCloudId = INITIAL_CLOUD_LAYOUT[0].id;
     this.jumpedFromId = '';
@@ -205,12 +207,16 @@ export class GameScene extends Phaser.Scene {
 
   /** 하단 컨트롤 UI: 방향 휠 + JUMP 버튼 */
   private setupBottomControls(): void {
-    // 방향 휠 — 패턴에 따라 drag / oscillate 모드 결정
-    const wheelMode = this.jumpPattern === JumpPatternType.PATTERN_2 ? 'drag' : 'oscillate';
-    this.directionWheel = new DirectionWheel(this, DIR_WHEEL_CX, DIR_WHEEL_CY, DIR_WHEEL_RADIUS, wheelMode);
+    // 방향 휠 — 패턴 1·2: 드래그, 패턴 3: 진자
+    const isDragPattern = this.jumpPattern === JumpPatternType.PATTERN_1 ||
+                          this.jumpPattern === JumpPatternType.PATTERN_2;
+    this.directionWheel = new DirectionWheel(
+      this, DIR_WHEEL_CX, DIR_WHEEL_CY, DIR_WHEEL_RADIUS,
+      isDragPattern ? 'drag' : 'oscillate',
+    );
 
-    // 패턴 2: 드래그 릴리즈로 점프
-    if (this.jumpPattern === JumpPatternType.PATTERN_2) {
+    // 패턴 1·2: 드래그 릴리즈로 점프
+    if (isDragPattern) {
       this.directionWheel.onPress(() => { this.showDirectionArrow = true; });
       this.directionWheel.onRelease((holdDuration) => { this.handleJump(holdDuration); });
     }
@@ -329,8 +335,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private applyPhysics(dt: number): void {
-    if (this._physicsGravity) {
-      // 풍선 충돌 후: 중력 가속 (MAX_FALL_SPEED 상한)
+    // 포물선 점프(패턴 1) 비행 중 또는 풍선 충돌 낙하 중 중력 적용
+    if (this._physicsGravity || this._parabolicJump) {
       this.player.vy = Math.min(
         this.player.vy + GAMEPLAY.GRAVITY * dt,
         GAMEPLAY.MAX_FALL_SPEED,
@@ -384,8 +390,9 @@ export class GameScene extends Phaser.Scene {
       this.triggerGameOver(this._physicsGravity ? 0 : 1000);
       return;
     }
-    // 타임아웃 — 물리 낙하 중엔 무시
-    if (!this.player.isDead && this.time.now - this.jumpTime > GAMEPLAY.JUMP_STRAIGHT_TIMEOUT_MS) {
+    // 타임아웃 — 물리 낙하 중 또는 포물선 비행 중엔 무시 (자연스럽게 낙하로 종료)
+    if (!this.player.isDead && !this._parabolicJump &&
+        this.time.now - this.jumpTime > GAMEPLAY.JUMP_STRAIGHT_TIMEOUT_MS) {
       this.triggerGameOver();
     }
   }
@@ -404,18 +411,19 @@ export class GameScene extends Phaser.Scene {
   private updateChargeIndicator(): void {
     this.chargeIndicator.clear();
 
-    const isDirectional = this.jumpPattern === JumpPatternType.PATTERN_2 ||
+    const isDirectional = this.jumpPattern === JumpPatternType.PATTERN_1 ||
+                          this.jumpPattern === JumpPatternType.PATTERN_2 ||
                           this.jumpPattern === JumpPatternType.PATTERN_3;
     if (!isDirectional || !this.player.isOnGround || this.player.isDead || this.isGameOver) return;
 
-    const isCharging = this.jumpPattern === JumpPatternType.PATTERN_2
-      ? this.directionWheel.isDragging
-      : this.inputManager.isPressed;
+    const isCharging = this.jumpPattern === JumpPatternType.PATTERN_3
+      ? this.inputManager.isPressed
+      : this.directionWheel.isDragging; // 패턴 1·2: 드래그 중
     if (!isCharging) return;
 
-    const duration = this.jumpPattern === JumpPatternType.PATTERN_2
-      ? this.directionWheel.getDragDuration()
-      : this.inputManager.getChargeDuration();
+    const duration = this.jumpPattern === JumpPatternType.PATTERN_3
+      ? this.inputManager.getChargeDuration()
+      : this.directionWheel.getDragDuration();
     const t = Phaser.Math.Clamp(
       (duration - GAMEPLAY.JUMP_CHARGE_MIN_MS) /
         (GAMEPLAY.JUMP_CHARGE_MAX_MS - GAMEPLAY.JUMP_CHARGE_MIN_MS),
@@ -448,7 +456,9 @@ export class GameScene extends Phaser.Scene {
     this.directionArrow.clear();
 
     if (!this.player.isOnGround || this.player.isDead || this.isGameOver) return;
-    if (this.jumpPattern !== JumpPatternType.PATTERN_2 && this.jumpPattern !== JumpPatternType.PATTERN_3) return;
+    if (this.jumpPattern !== JumpPatternType.PATTERN_1 &&
+        this.jumpPattern !== JumpPatternType.PATTERN_2 &&
+        this.jumpPattern !== JumpPatternType.PATTERN_3) return;
     if (!this.showDirectionArrow) return;
 
     const angle = this.directionWheel.angle;
@@ -516,10 +526,12 @@ export class GameScene extends Phaser.Scene {
     if (jumped) {
       this.jumpedFromId = this.currentCloudId;
       this.jumpTime = this.time.now;
+      this._parabolicJump = (this.jumpPattern === JumpPatternType.PATTERN_1);
     }
   }
 
   private handleLand(cloud: CloudIsland): void {
+    this._parabolicJump = false;
     const prevId = this.currentCloudId;
 
     const maxOffset = cloud.halfW - this.player.HALF_W * 0.6;
@@ -547,7 +559,9 @@ export class GameScene extends Phaser.Scene {
       this.time.delayedCall(300, () => {
         if (!this.isGameOver) {
           this.inputManager.enable();
-          if (this.jumpPattern === JumpPatternType.PATTERN_2) this.directionWheel.enable();
+          const isDragPat = this.jumpPattern === JumpPatternType.PATTERN_1 ||
+                            this.jumpPattern === JumpPatternType.PATTERN_2;
+          if (isDragPat) this.directionWheel.enable();
         }
       });
     }
@@ -555,12 +569,14 @@ export class GameScene extends Phaser.Scene {
 
   /** 착지 시 패턴별 휠 상태 복원 */
   private resetWheelOnLand(): void {
-    if (this.jumpPattern === JumpPatternType.PATTERN_2) {
+    const isDragPattern = this.jumpPattern === JumpPatternType.PATTERN_1 ||
+                          this.jumpPattern === JumpPatternType.PATTERN_2;
+    if (isDragPattern) {
       this.directionWheel.resetAngle(); // 드래그 핸들 중앙 복귀
-      // 패턴 2: 드래그 시작 시 화살표 표시 (showDirectionArrow = false 유지)
+      // 패턴 1·2: 드래그 시작 시 화살표 표시 (showDirectionArrow = false 유지)
     } else {
-      this.directionWheel.resume(); // 진자 재개
-      this.showDirectionArrow = true; // 패턴 3: 진자 방향 항상 표시
+      this.directionWheel.resume();   // 패턴 3: 진자 재개
+      this.showDirectionArrow = true; // 진자 방향 항상 표시
     }
   }
 
@@ -570,6 +586,7 @@ export class GameScene extends Phaser.Scene {
 
     this.player.isDead = true;
     this.player.isOnGround = false;
+    this._parabolicJump = false;
 
     // 충돌 당시 수평 속도 보존 (0.3초 후 낙하 방향에 반영)
     const savedVx = this.player.vx * 0.6;
@@ -580,7 +597,9 @@ export class GameScene extends Phaser.Scene {
 
     this.inputManager.disable();
     this.audioManager.stopBgm();
-    if (this.jumpPattern === JumpPatternType.PATTERN_2) this.directionWheel.disable();
+    const isDragPattern = this.jumpPattern === JumpPatternType.PATTERN_1 ||
+                          this.jumpPattern === JumpPatternType.PATTERN_2;
+    if (isDragPattern) this.directionWheel.disable();
 
     // 0.3초 대기 후 살짝 위로 튀어 오르며 중력 낙하 시작
     this.time.delayedCall(300, () => {
