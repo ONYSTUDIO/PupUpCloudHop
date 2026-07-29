@@ -20,31 +20,8 @@ export const DEPTH = {
   BACKGROUND: 0,
   DECOR_CLOUD: 1,
   CLOUD_ISLAND: 2,
-  OBSTACLE: 8,
   PLAYER: 10,
   HUD: 20,
-} as const;
-
-export const OBSTACLE_CONFIG = {
-  // ── 새떼 ──────────────────────────────────────────────────
-  BIRD_FLOCK_SPEED_MIN: 280,
-  BIRD_FLOCK_SPEED_MAX: 400,
-  BIRD_FLOCK_HALF_W: 120,
-  BIRD_FLOCK_HALF_H: 50,
-  SPAWN_INTERVAL_MIN_MS: 9000,
-  SPAWN_INTERVAL_MAX_MS: 15000,
-  FIRST_SPAWN_DELAY_MS: 10000,
-  SPAWN_Y_MARGIN_TOP: 200,
-  SPAWN_Y_MARGIN_BOTTOM: 500,
-  // ── 번개 폭풍 ─────────────────────────────────────────────
-  STORM_RAIN_DROP_COUNT: 80,
-  STORM_RAIN_DURATION_MS: 3500,      // 비 내리는 시간
-  STORM_WARNING_DURATION_MS: 2000,   // 경고 표시 시간
-  STORM_STRIKE_DURATION_MS: 450,     // 번개 이동 시간
-  STORM_HIT_DURATION_MS: 400,        // 충격 플래시 시간
-  STORM_SPAWN_INTERVAL_MIN_MS: 22000,
-  STORM_SPAWN_INTERVAL_MAX_MS: 32000,
-  STORM_FIRST_SPAWN_DELAY_MS: 25000,
 } as const;
 
 // 동적 구름 스폰 / 디스폰 설정
@@ -70,7 +47,7 @@ export const SPAWN_CONFIG = {
 // 초기 구름섬 배치 — 프로토타입용 고정 레이아웃
 // world Y 는 0(상단) → 1920(하단). 플레이어는 아래서 위로 올라간다.
 export const INITIAL_CLOUD_LAYOUT = [
-  { id: 'c0', centerX: 540, centerY: 1650, orbitRadiusX: 75,  orbitRadiusY: 22, orbitSpeed: 0.55, startAngle: 0,              rotationDirection:  1 as const, width: 280, height: 72 },
+  { id: 'c0', centerX: 540, centerY: 1570, orbitRadiusX: 75,  orbitRadiusY: 22, orbitSpeed: 0.55, startAngle: 0,              rotationDirection:  1 as const, width: 280, height: 72 },
   { id: 'c1', centerX: 260, centerY: 1360, orbitRadiusX: 100, orbitRadiusY: 32, orbitSpeed: 0.80, startAngle: Math.PI / 3,     rotationDirection: -1 as const, width: 230, height: 64 },
   { id: 'c2', centerX: 770, centerY: 1060, orbitRadiusX: 115, orbitRadiusY: 38, orbitSpeed: 0.70, startAngle: Math.PI,         rotationDirection:  1 as const, width: 245, height: 66 },
   { id: 'c3', centerX: 380, centerY:  760, orbitRadiusX: 90,  orbitRadiusY: 28, orbitSpeed: 0.95, startAngle: Math.PI / 2,     rotationDirection: -1 as const, width: 210, height: 60 },

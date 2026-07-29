@@ -58,6 +58,12 @@ export class DirectionWheel {
 
   get angle(): number { return this._angle; }
 
+  /** 휠 그래픽 표시 여부 (oscillate 모드에서 내부 각도 계산은 계속 진행) */
+  setVisible(visible: boolean): void {
+    this.trackGraphics.setVisible(visible);
+    this.handleGraphics.setVisible(visible);
+  }
+
   /** 인터랙션 / 진자 활성화 */
   enable(): void {
     this._enabled = true;

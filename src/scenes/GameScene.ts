@@ -16,13 +16,10 @@ import { SCENE_KEYS, DEPTH, EVENTS, INITIAL_CLOUD_LAYOUT } from '@config/constan
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 import { GAMEPLAY } from '@config/gameplayConfig';
 
-// ─── 하단 버튼 레이아웃 상수 ────────────────────────────────
-const JUMP_BTN_CX = 860;
-const JUMP_BTN_CY = 1760;
-const JUMP_BTN_RADIUS = 120;
-
-const DIR_WHEEL_CX = 220;
-const DIR_WHEEL_CY = 1760;
+// ─── 하단 버튼 공통 레이아웃 ─────────────────────────────────
+const BTN_PANEL_TOP    = 1680;           // 버튼 패널 상단 (게임/UI 경계)
+const BTN_CENTER_Y     = 1800;           // 버튼 중심 Y
+const JUMP_BTN_RADIUS  = 120;
 const DIR_WHEEL_RADIUS = 145;
 
 export class GameScene extends Phaser.Scene {
@@ -48,6 +45,11 @@ export class GameScene extends Phaser.Scene {
   private chargeIndicator!: Phaser.GameObjects.Graphics;
   private jumpButtonGraphics!: Phaser.GameObjects.Graphics;
   private directionArrow!: Phaser.GameObjects.Graphics;
+
+  // 패턴별 버튼 위치 (setupBottomControls에서 결정)
+  private jumpBtnCX: number = 0;
+  private jumpBtnCY: number = 0;
+  private showJumpBtn: boolean = true;
 
   // 게임 상태
   private currentCloudId: string = '';
@@ -78,6 +80,7 @@ export class GameScene extends Phaser.Scene {
     this.jumpTime = 0;
     this.landingOffsetX = 0;
     this.capturedAngle = -Math.PI / 2;
+    this.showDirectionArrow = true;
 
     this.saveManager = new SaveManager();
     this.audioManager = new AudioManager(this, this.saveManager.isSoundEnabled());
@@ -205,15 +208,54 @@ export class GameScene extends Phaser.Scene {
 
   private getPlayerHalfH(): number { return 28; }
 
-  /** 하단 컨트롤 UI: 방향 휠 + JUMP 버튼 */
+  /** 하단 컨트롤 UI 전체 구성 */
   private setupBottomControls(): void {
-    // 방향 휠 — 패턴 1·2: 드래그, 패턴 3: 진자
+    // ── 버튼 패널 배경 ───────────────────────────────────────
+    const panelG = this.add.graphics().setScrollFactor(0).setDepth(DEPTH.HUD - 2);
+    panelG.fillStyle(0x000510, 0.52);
+    panelG.fillRect(0, BTN_PANEL_TOP, BASE_WIDTH, BASE_HEIGHT - BTN_PANEL_TOP);
+    panelG.lineStyle(1.5, 0x4466bb, 0.5);
+    panelG.lineBetween(0, BTN_PANEL_TOP, BASE_WIDTH, BTN_PANEL_TOP);
+
+    // ── 패턴별 버튼 배치 결정 ────────────────────────────────
     const isDragPattern = this.jumpPattern === JumpPatternType.PATTERN_1 ||
                           this.jumpPattern === JumpPatternType.PATTERN_2;
+
+    let wheelX: number;
+    let wheelY: number;
+
+    if (this.jumpPattern === JumpPatternType.PATTERN_2) {
+      // 방향 휠만 중앙
+      wheelX = BASE_WIDTH / 2;
+      wheelY = BTN_CENTER_Y;
+      this.jumpBtnCX = BASE_WIDTH / 2;
+      this.jumpBtnCY = BTN_CENTER_Y;
+      this.showJumpBtn = false;
+    } else if (this.jumpPattern === JumpPatternType.PATTERN_3) {
+      // 점프 버튼만 중앙, 휠은 숨김
+      wheelX = BASE_WIDTH / 2;
+      wheelY = BTN_CENTER_Y;
+      this.jumpBtnCX = BASE_WIDTH / 2;
+      this.jumpBtnCY = BTN_CENTER_Y;
+      this.showJumpBtn = true;
+    } else {
+      // 패턴 1: 휠 좌측, 점프 우측 (기존 배치)
+      wheelX = 220;
+      wheelY = BTN_CENTER_Y;
+      this.jumpBtnCX = BASE_WIDTH - 220;
+      this.jumpBtnCY = BTN_CENTER_Y;
+      this.showJumpBtn = true;
+    }
+
+    // ── 방향 휠 생성 ─────────────────────────────────────────
     this.directionWheel = new DirectionWheel(
-      this, DIR_WHEEL_CX, DIR_WHEEL_CY, DIR_WHEEL_RADIUS,
+      this, wheelX, wheelY, DIR_WHEEL_RADIUS,
       isDragPattern ? 'drag' : 'oscillate',
     );
+    // 패턴 3: 휠은 내부 각도 계산만, 시각적으로는 숨김
+    if (this.jumpPattern === JumpPatternType.PATTERN_3) {
+      this.directionWheel.setVisible(false);
+    }
 
     // 패턴 1·2: 드래그 릴리즈로 점프
     if (isDragPattern) {
@@ -221,42 +263,42 @@ export class GameScene extends Phaser.Scene {
       this.directionWheel.onRelease((holdDuration) => { this.handleJump(holdDuration); });
     }
 
-    // JUMP 버튼 배경 (정적 — 상태 갱신은 updateJumpButton에서)
+    // ── JUMP 버튼 배경 ───────────────────────────────────────
     this.jumpButtonGraphics = this.add.graphics()
       .setScrollFactor(0)
       .setDepth(DEPTH.HUD);
 
-    this.drawJumpButton(false);
+    if (this.showJumpBtn) this.drawJumpButton(false);
   }
 
   private drawJumpButton(pressed: boolean): void {
     const g = this.jumpButtonGraphics;
     g.clear();
+    if (!this.showJumpBtn) return;
 
     const alpha = pressed ? 0.55 : 0.32;
     const scale = pressed ? 0.92 : 1;
     const r = JUMP_BTN_RADIUS * scale;
 
     g.fillStyle(0x000000, alpha);
-    g.fillCircle(JUMP_BTN_CX, JUMP_BTN_CY, r + 4);
+    g.fillCircle(this.jumpBtnCX, this.jumpBtnCY, r + 4);
 
     g.lineStyle(4, 0xffffff, pressed ? 0.9 : 0.5);
-    g.strokeCircle(JUMP_BTN_CX, JUMP_BTN_CY, r);
+    g.strokeCircle(this.jumpBtnCX, this.jumpBtnCY, r);
 
     g.fillStyle(0xffffff, pressed ? 0.9 : 0.6);
-    // "JUMP" 텍스트 대신 위쪽 화살표 삼각형
-    const tipX = JUMP_BTN_CX;
-    const tipY = JUMP_BTN_CY - r * 0.38;
+    const tipX = this.jumpBtnCX;
+    const tipY = this.jumpBtnCY - r * 0.38;
     const baseHalf = r * 0.4;
-    const baseY = JUMP_BTN_CY + r * 0.22;
+    const baseY = this.jumpBtnCY + r * 0.22;
     g.fillTriangle(tipX, tipY, tipX - baseHalf, baseY, tipX + baseHalf, baseY);
   }
 
   private setupInput(): void {
     this.inputManager = new InputManager(
       this,
-      JUMP_BTN_CX,
-      JUMP_BTN_CY,
+      this.jumpBtnCX,
+      this.jumpBtnCY,
       JUMP_BTN_RADIUS + 20,
     );
 
@@ -501,6 +543,7 @@ export class GameScene extends Phaser.Scene {
   // ─── JUMP 버튼 상태 갱신 ───────────────────────────────
 
   private updateJumpButton(): void {
+    if (!this.showJumpBtn) return;
     this.drawJumpButton(this.inputManager.isPressed);
   }
 
