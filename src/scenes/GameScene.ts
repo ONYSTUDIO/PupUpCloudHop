@@ -6,14 +6,13 @@ import { CollisionSystem } from '@systems/CollisionSystem';
 import { PlatformMovementSystem } from '@systems/PlatformMovementSystem';
 import { ScoreSystem } from '@systems/ScoreSystem';
 import { SpawnSystem } from '@systems/SpawnSystem';
-import { ObstacleSystem } from '@systems/ObstacleSystem';
 import { AudioManager } from '@managers/AudioManager';
 import { InputManager } from '@managers/InputManager';
 import { SaveManager } from '@managers/SaveManager';
 import { GameHud } from '@ui/GameHud';
 import { DirectionWheel } from '@ui/DirectionWheel';
 import { JumpPatternType } from '@game-types/game';
-import { SCENE_KEYS, DEPTH, EVENTS, INITIAL_CLOUD_LAYOUT, SPAWN_CONFIG } from '@config/constants';
+import { SCENE_KEYS, DEPTH, EVENTS, INITIAL_CLOUD_LAYOUT } from '@config/constants';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 import { GAMEPLAY } from '@config/gameplayConfig';
 
@@ -37,7 +36,6 @@ export class GameScene extends Phaser.Scene {
   private collisionSystem!: CollisionSystem;
   private scoreSystem!: ScoreSystem;
   private spawnSystem!: SpawnSystem;
-  private obstacleSystem!: ObstacleSystem;
 
   // 매니저 / UI
   private audioManager!: AudioManager;
@@ -85,7 +83,6 @@ export class GameScene extends Phaser.Scene {
     this.jumpSystem = new JumpSystem();
     this.collisionSystem = new CollisionSystem();
     this.scoreSystem = new ScoreSystem(this, this.saveManager.getBestScore());
-    this.obstacleSystem = new ObstacleSystem(this, this.time.now);
     this.hud = new GameHud(this, this.saveManager.getBestScore());
 
     this.setupBackground();
@@ -116,25 +113,10 @@ export class GameScene extends Phaser.Scene {
     this.movementSystem.update(delta);
     this.spawnSystem.updateVortexPositions(delta);
 
-    // 2. 장애물 업데이트
-    const scrollY = this.cameras.main.scrollY;
-    this.obstacleSystem.update(delta, this.time.now, scrollY);
-    this.checkObstacleCollisions();
-
-    const currentCloud = this.player.isOnGround
-      ? (this.clouds.find((c) => c.id === this.currentCloudId) ?? null)
-      : null;
-    const stormHitId = this.obstacleSystem.updateStorm(
-      delta, this.time.now, scrollY, currentCloud,
-    );
-    if (stormHitId !== null) {
-      this.clouds.find((c) => c.id === stormHitId)?.startFalling();
-    }
-
-    // 3. 동적 스폰 / 디스폰
+    // 2. 동적 스폰 / 디스폰
     this.updateSpawn();
 
-    // 4. 플레이어 물리 / 위치 처리
+    // 3. 플레이어 물리 / 위치 처리
     if (this.player.isOnGround) {
       this.followCurrentCloud();
     } else {
@@ -143,19 +125,19 @@ export class GameScene extends Phaser.Scene {
       this.checkFallDeath();
     }
 
-    // 5. 그래픽 동기화
+    // 4. 그래픽 동기화
     this.player.sync();
 
-    // 6. 충전 표시 (PATTERN_1 전용)
+    // 5. 충전 표시 (PATTERN_1 전용)
     this.updateChargeIndicator();
 
-    // 7. 방향 화살표
+    // 6. 방향 화살표
     this.updateDirectionArrow();
 
-    // 8. JUMP 버튼 시각 상태
+    // 7. JUMP 버튼 시각 상태
     this.updateJumpButton();
 
-    // 9. 카메라
+    // 8. 카메라
     this.updateCamera();
   }
 
@@ -305,7 +287,7 @@ export class GameScene extends Phaser.Scene {
   // ─── 동적 스폰 / 디스폰 ────────────────────────────────
 
   private updateSpawn(): void {
-    const scrollY = this.cameras.main.scrollY; // update() 루프의 scrollY와 별개 — 이 메서드 내부 지역 변수
+    const scrollY = this.cameras.main.scrollY;
 
     let spawnsThisFrame = 0;
     while (this.spawnSystem.needsSpawn(scrollY) && spawnsThisFrame < 2) {
@@ -327,32 +309,6 @@ export class GameScene extends Phaser.Scene {
       const removedIds = new Set(removed.map((c) => c.id));
       this.clouds = this.clouds.filter((c) => !removedIds.has(c.id));
     }
-
-    // 낙하 중인 구름(비탑승) — orbitCenterY 기반 제거 안 되므로 실제 Y로 별도 제거
-    const despawnY = scrollY + BASE_HEIGHT + SPAWN_CONFIG.DESPAWN_BUFFER;
-    const fallenOff = this.clouds.filter(
-      (c) => c.isFalling && c.id !== this.currentCloudId && c.y > despawnY,
-    );
-    for (const cloud of fallenOff) {
-      this.movementSystem.unregister(cloud);
-      cloud.destroy();
-    }
-    if (fallenOff.length > 0) {
-      const fallenIds = new Set(fallenOff.map((c) => c.id));
-      this.clouds = this.clouds.filter((c) => !fallenIds.has(c.id));
-    }
-  }
-
-  // ─── 장애물 충돌 ───────────────────────────────────────
-
-  private checkObstacleCollisions(): void {
-    const hit = this.collisionSystem.checkBirdFlockCloud(
-      this.obstacleSystem.getFlocks(),
-      this.clouds,
-    );
-    if (hit !== null) {
-      hit.cloud.startFalling();
-    }
   }
 
   // ─── 게임 루프 ─────────────────────────────────────────
@@ -364,14 +320,6 @@ export class GameScene extends Phaser.Scene {
     this.player.y = cloud.topY - this.player.HALF_H;
     this.player.vx = 0;
     this.player.vy = 0;
-
-    // 탑승 중인 구름이 새떼에 맞아 낙하 중 → 함께 추락 → 화면 이탈 시 게임 오버
-    if (cloud.isFalling) {
-      const scrollY = this.cameras.main.scrollY;
-      if (cloud.y > scrollY + BASE_HEIGHT + 60) {
-        this.triggerGameOver(0);
-      }
-    }
   }
 
   private applyPhysics(dt: number): void {
@@ -387,32 +335,35 @@ export class GameScene extends Phaser.Scene {
   }
 
   private checkLanding(): void {
-    if (this.player.isDead) return;
+    if (this.player.isDead && !this._physicsGravity) return;
 
-    // 1순위: 섬(잔디) 착지 — 성공
+    // physics fall 중에는 하강 중일 때만 착지 허용
+    const requireFalling = this._physicsGravity;
     const landed = this.collisionSystem.check(
       this.player,
       this.clouds,
       this.jumpedFromId,
       this.jumpTime,
       this.time.now,
-      false,
+      requireFalling,
     );
     if (landed !== null) {
       this.handleLand(landed);
       return;
     }
 
-    // 2순위: 구름·풍선 충돌 — 착지 실패, 낙하 후 게임 오버
-    const danger = this.collisionSystem.checkDanger(
-      this.player,
-      this.clouds,
-      this.jumpedFromId,
-      this.jumpTime,
-      this.time.now,
-    );
-    if (danger !== null) {
-      this.handleDangerHit();
+    // 풍선 위험 판정: physics fall 중에는 스킵 (구름·풍선 통과)
+    if (!this.player.isDead) {
+      const danger = this.collisionSystem.checkDanger(
+        this.player,
+        this.clouds,
+        this.jumpedFromId,
+        this.jumpTime,
+        this.time.now,
+      );
+      if (danger !== null) {
+        this.handleDangerHit();
+      }
     }
   }
 
@@ -577,6 +528,15 @@ export class GameScene extends Phaser.Scene {
       this.scoreSystem.onLand();
       this.events.emit(EVENTS.SCORE_UPDATE, this.scoreSystem.getScore());
     }
+
+    // 풍선 충돌 낙하 중 착지 → 게임 계속
+    if (this._physicsGravity) {
+      this.player.isDead = false;
+      this._physicsGravity = false;
+      this.time.delayedCall(300, () => {
+        if (!this.isGameOver) this.inputManager.enable();
+      });
+    }
   }
 
   /** 풍선 충돌: 0.3초 제자리 대기 → 살짝 위로 팝 → 중력 낙하 → 화면 이탈 시 팝업 */
@@ -635,7 +595,6 @@ export class GameScene extends Phaser.Scene {
     this.inputManager?.destroy();
     this.movementSystem?.clear();
     this.spawnSystem?.clearAll();
-    this.obstacleSystem?.clearAll();
     this.clouds?.forEach((c) => c.destroy());
     this.clouds = [];
     this.player?.destroy();
