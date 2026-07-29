@@ -2,9 +2,22 @@ import Phaser from 'phaser';
 import { SCENE_KEYS, DEPTH } from '@config/constants';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 import { SaveManager } from '@managers/SaveManager';
+import { JumpPatternType } from '@game-types/game';
+
+const SELECTABLE_PATTERNS: JumpPatternType[] = [
+  JumpPatternType.PATTERN_2,
+  JumpPatternType.PATTERN_3,
+];
+
+const PATTERN_NAMES: Record<string, string> = {
+  [JumpPatternType.PATTERN_2]: '패턴 2  드래그',
+  [JumpPatternType.PATTERN_3]: '패턴 3  타이밍',
+};
 
 export class TitleScene extends Phaser.Scene {
   private saveManager!: SaveManager;
+  private selectedPattern: JumpPatternType = JumpPatternType.PATTERN_3;
+  private patternLabel!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: SCENE_KEYS.TITLE });
@@ -15,17 +28,17 @@ export class TitleScene extends Phaser.Scene {
     this.drawBackground();
     this.addTitle();
     this.addBestScore();
+    this.addPatternSelector();
     this.addStartButton();
   }
 
+  // ─── 배경 ────────────────────────────────────────────────
+
   private drawBackground(): void {
     const g = this.add.graphics().setDepth(DEPTH.BACKGROUND);
-
-    // 하늘 그라데이션 (위: 연한 하늘색, 아래: 진한 파란색)
     g.fillGradientStyle(0x87ceeb, 0x87ceeb, 0x2277cc, 0x2277cc, 1);
     g.fillRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
 
-    // 장식용 구름
     const decorClouds = [
       { x: 180,  y: 280,  w: 320, h: 80 },
       { x: 880,  y: 480,  w: 260, h: 65 },
@@ -39,21 +52,16 @@ export class TitleScene extends Phaser.Scene {
     decorClouds.forEach((c) => this.drawDecorCloud(g, c.x, c.y, c.w, c.h));
   }
 
-  private drawDecorCloud(
-    g: Phaser.GameObjects.Graphics,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-  ): void {
+  private drawDecorCloud(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number): void {
     g.fillStyle(0xffffff, 0.22);
     g.fillEllipse(x, y, w, h);
     g.fillEllipse(x - w * 0.22, y - h * 0.25, w * 0.42, h * 0.65);
     g.fillEllipse(x + w * 0.12, y - h * 0.35, w * 0.36, h * 0.56);
   }
 
+  // ─── 타이틀 ───────────────────────────────────────────────
+
   private addTitle(): void {
-    // 타이틀 배경 플레이트
     const cx = BASE_WIDTH / 2;
     this.add
       .rectangle(cx, BASE_HEIGHT * 0.3, 900, 380, 0x003399, 0.35)
@@ -62,26 +70,18 @@ export class TitleScene extends Phaser.Scene {
 
     this.add
       .text(cx, BASE_HEIGHT * 0.23, '안 떨어질개', {
-        fontSize: '110px',
-        fontStyle: 'bold',
-        color: '#ffffff',
-        stroke: '#001166',
-        strokeThickness: 10,
+        fontSize: '110px', fontStyle: 'bold',
+        color: '#ffffff', stroke: '#001166', strokeThickness: 10,
       })
-      .setOrigin(0.5)
-      .setDepth(DEPTH.HUD);
+      .setOrigin(0.5).setDepth(DEPTH.HUD);
 
     this.add
       .text(cx, BASE_HEIGHT * 0.35, 'Pup Up!  Cloud Hop', {
-        fontSize: '58px',
-        color: '#ffe066',
-        stroke: '#001166',
-        strokeThickness: 6,
+        fontSize: '58px', color: '#ffe066',
+        stroke: '#001166', strokeThickness: 6,
       })
-      .setOrigin(0.5)
-      .setDepth(DEPTH.HUD);
+      .setOrigin(0.5).setDepth(DEPTH.HUD);
 
-    // 임시 강아지 아이콘
     const dogG = this.add.graphics().setDepth(DEPTH.HUD);
     dogG.setPosition(cx, BASE_HEIGHT * 0.52);
     this.drawMiniDog(dogG);
@@ -101,49 +101,108 @@ export class TitleScene extends Phaser.Scene {
     g.fillEllipse(3, -10, 18, 12);
   }
 
+  // ─── 최고 기록 ────────────────────────────────────────────
+
   private addBestScore(): void {
     const best = this.saveManager.getBestScore();
     this.add
-      .text(BASE_WIDTH / 2, BASE_HEIGHT * 0.68, `최고 기록  ${best}`, {
-        fontSize: '58px',
-        fontStyle: 'bold',
-        color: '#ffdd44',
-        stroke: '#003399',
-        strokeThickness: 6,
+      .text(BASE_WIDTH / 2, BASE_HEIGHT * 0.66, `최고 기록  ${best}`, {
+        fontSize: '58px', fontStyle: 'bold',
+        color: '#ffdd44', stroke: '#003399', strokeThickness: 6,
       })
-      .setOrigin(0.5)
-      .setDepth(DEPTH.HUD);
+      .setOrigin(0.5).setDepth(DEPTH.HUD);
   }
+
+  // ─── 패턴 셀렉터 ─────────────────────────────────────────
+
+  private addPatternSelector(): void {
+    const cx = BASE_WIDTH / 2;
+    const cy = BASE_HEIGHT * 0.76;
+    const panelW = 860;
+    const panelH = 140;
+
+    // 패널 배경
+    this.add
+      .rectangle(cx, cy, panelW, panelH, 0x001166, 0.55)
+      .setOrigin(0.5).setDepth(DEPTH.HUD - 1)
+      .setStrokeStyle(2, 0x4466cc, 0.7);
+
+    // 라벨
+    this.add
+      .text(cx, cy - 34, '조작 방식', {
+        fontSize: '36px', color: '#99aaee',
+      })
+      .setOrigin(0.5).setDepth(DEPTH.HUD);
+
+    // 왼쪽 화살표
+    this.add
+      .text(cx - 370, cy + 22, '◀', {
+        fontSize: '60px', color: '#ffffff',
+      })
+      .setOrigin(0.5).setDepth(DEPTH.HUD)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.cyclePattern(-1))
+      .on('pointerover', function (this: Phaser.GameObjects.Text) { this.setAlpha(0.7); })
+      .on('pointerout',  function (this: Phaser.GameObjects.Text) { this.setAlpha(1); });
+
+    // 패턴 이름 (중앙)
+    this.patternLabel = this.add
+      .text(cx, cy + 22, '', {
+        fontSize: '52px', fontStyle: 'bold', color: '#ffffff',
+      })
+      .setOrigin(0.5).setDepth(DEPTH.HUD);
+
+    // 오른쪽 화살표
+    this.add
+      .text(cx + 370, cy + 22, '▶', {
+        fontSize: '60px', color: '#ffffff',
+      })
+      .setOrigin(0.5).setDepth(DEPTH.HUD)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.cyclePattern(1))
+      .on('pointerover', function (this: Phaser.GameObjects.Text) { this.setAlpha(0.7); })
+      .on('pointerout',  function (this: Phaser.GameObjects.Text) { this.setAlpha(1); });
+
+    this.updatePatternLabel();
+  }
+
+  private cyclePattern(dir: 1 | -1): void {
+    const idx = SELECTABLE_PATTERNS.indexOf(this.selectedPattern);
+    const next = (idx + dir + SELECTABLE_PATTERNS.length) % SELECTABLE_PATTERNS.length;
+    this.selectedPattern = SELECTABLE_PATTERNS[next]!;
+    this.updatePatternLabel();
+  }
+
+  private updatePatternLabel(): void {
+    this.patternLabel.setText(PATTERN_NAMES[this.selectedPattern] ?? '');
+  }
+
+  // ─── 시작 버튼 ────────────────────────────────────────────
 
   private addStartButton(): void {
     const cx = BASE_WIDTH / 2;
-    const cy = BASE_HEIGHT * 0.81;
+    const cy = BASE_HEIGHT * 0.88;
 
     const btn = this.add
       .text(cx, cy, '  게임 시작  ', {
-        fontSize: '72px',
-        fontStyle: 'bold',
-        color: '#ffffff',
-        backgroundColor: '#1155cc',
+        fontSize: '72px', fontStyle: 'bold',
+        color: '#ffffff', backgroundColor: '#1155cc',
         padding: { x: 60, y: 28 },
       })
-      .setOrigin(0.5)
-      .setDepth(DEPTH.HUD)
+      .setOrigin(0.5).setDepth(DEPTH.HUD)
       .setInteractive({ useHandCursor: true });
 
     btn.on('pointerover', () => btn.setAlpha(0.85));
     btn.on('pointerout',  () => btn.setAlpha(1));
-    btn.on('pointerdown', () => this.scene.start(SCENE_KEYS.GAME));
+    btn.on('pointerdown', () =>
+      this.scene.start(SCENE_KEYS.GAME, { pattern: this.selectedPattern }),
+    );
 
-    // 깜빡 애니메이션
     this.tweens.add({
       targets: btn,
-      scaleX: 1.04,
-      scaleY: 1.04,
-      duration: 700,
-      ease: 'Sine.easeInOut',
-      yoyo: true,
-      repeat: -1,
+      scaleX: 1.04, scaleY: 1.04,
+      duration: 700, ease: 'Sine.easeInOut',
+      yoyo: true, repeat: -1,
     });
   }
 }

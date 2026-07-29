@@ -21,11 +21,11 @@ export class JumpSystem {
 
     player.isOnGround = false;
 
-    if (pattern === JumpPatternType.PATTERN_1) {
-      // 방향 휠이 지정한 각도로 직선 이동
+    if (pattern === JumpPatternType.PATTERN_2 || pattern === JumpPatternType.PATTERN_3) {
+      // 방향 휠 각도로 직선 이동 (드래그 or 진자 타이밍)
       this.applyDirectionalVelocity(player, directionAngle, chargeDuration);
     } else {
-      // 가장 가까운 구름으로 자동 조준 직선 이동
+      // PATTERN_1: 가장 가까운 구름으로 자동 조준
       const target = this.findTarget(player, clouds, currentCloudId);
       this.applyStraightVelocity(player, target, chargeDuration);
     }

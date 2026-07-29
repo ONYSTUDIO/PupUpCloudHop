@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
-import type { ScoreData } from '@game-types/game';
+import type { ScoreData, JumpPatternType } from '@game-types/game';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 import { SCENE_KEYS, DEPTH } from '@config/constants';
 
 export class ResultPanel {
   private container: Phaser.GameObjects.Container;
 
-  constructor(scene: Phaser.Scene, score: ScoreData, isNewBest: boolean) {
+  constructor(scene: Phaser.Scene, score: ScoreData, isNewBest: boolean, pattern: JumpPatternType) {
     const cx = BASE_WIDTH / 2;
     const cy = BASE_HEIGHT / 2;
 
@@ -52,7 +52,7 @@ export class ResultPanel {
       .setOrigin(0.5);
 
     const retryBtn = this.makeButton(scene, cx, cy + 220, '다시 하기', 0x1155cc, () => {
-      scene.scene.start(SCENE_KEYS.GAME);
+      scene.scene.start(SCENE_KEYS.GAME, { pattern });
     });
 
     const titleBtn = this.makeButton(scene, cx, cy + 350, '타이틀로', 0x448866, () => {

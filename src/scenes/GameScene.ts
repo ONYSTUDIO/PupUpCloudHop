@@ -49,18 +49,16 @@ export class GameScene extends Phaser.Scene {
   private jumpButtonGraphics!: Phaser.GameObjects.Graphics;
   private directionArrow!: Phaser.GameObjects.Graphics;
 
-  // 테스트 디버그
-  private debugPatternText!: Phaser.GameObjects.Text;
-
   // 게임 상태
   private currentCloudId: string = '';
   private jumpedFromId: string = '';
   private jumpTime: number = 0;
   private isGameOver: boolean = false;
-  private jumpPattern: JumpPatternType = JumpPatternType.PATTERN_1;
+  private jumpPattern: JumpPatternType = JumpPatternType.PATTERN_3;
   private landingOffsetX: number = 0;
   private showDirectionArrow: boolean = true;
   private _physicsGravity: boolean = false; // 풍선 충돌 후 중력 낙하 활성화
+  private capturedAngle: number = -Math.PI / 2; // 패턴 3 전용: 버튼 누른 순간 각도
 
   private _onVisibilityChange: (() => void) | null = null;
 
@@ -68,7 +66,8 @@ export class GameScene extends Phaser.Scene {
     super({ key: SCENE_KEYS.GAME });
   }
 
-  create(): void {
+  create(data?: { pattern?: JumpPatternType }): void {
+    this.jumpPattern = data?.pattern ?? JumpPatternType.PATTERN_3;
     this.isGameOver = false;
     this._physicsGravity = false;
     this.clouds = [];
@@ -76,6 +75,7 @@ export class GameScene extends Phaser.Scene {
     this.jumpedFromId = '';
     this.jumpTime = 0;
     this.landingOffsetX = 0;
+    this.capturedAngle = -Math.PI / 2;
 
     this.saveManager = new SaveManager();
     this.audioManager = new AudioManager(this, this.saveManager.isSoundEnabled());
@@ -96,11 +96,6 @@ export class GameScene extends Phaser.Scene {
     this.chargeIndicator = this.add.graphics().setDepth(DEPTH.PLAYER + 1);
     this.directionArrow = this.add.graphics().setDepth(DEPTH.PLAYER + 1);
 
-    this.debugPatternText = this.add
-      .text(20, 100, '', { fontSize: '28px', color: '#ffff00', stroke: '#000000', strokeThickness: 4 })
-      .setScrollFactor(0)
-      .setDepth(DEPTH.HUD + 1);
-
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
   }
 
@@ -109,9 +104,10 @@ export class GameScene extends Phaser.Scene {
 
     const dt = delta / 1000;
 
-    // 1. 구름섬 위치 갱신
+    // 1. 구름섬 위치 갱신 + 방향 휠 진자 갱신
     this.movementSystem.update(delta);
     this.spawnSystem.updateVortexPositions(delta);
+    this.directionWheel.update(delta);
 
     // 2. 동적 스폰 / 디스폰
     this.updateSpawn();
@@ -209,16 +205,15 @@ export class GameScene extends Phaser.Scene {
 
   /** 하단 컨트롤 UI: 방향 휠 + JUMP 버튼 */
   private setupBottomControls(): void {
-    // 방향 휠 — 손을 놓으면 바로 점프
-    this.directionWheel = new DirectionWheel(
-      this, DIR_WHEEL_CX, DIR_WHEEL_CY, DIR_WHEEL_RADIUS,
-    );
-    this.directionWheel.onPress(() => {
-      this.showDirectionArrow = true;
-    });
-    this.directionWheel.onRelease((holdDuration) => {
-      this.handleJump(holdDuration);
-    });
+    // 방향 휠 — 패턴에 따라 drag / oscillate 모드 결정
+    const wheelMode = this.jumpPattern === JumpPatternType.PATTERN_2 ? 'drag' : 'oscillate';
+    this.directionWheel = new DirectionWheel(this, DIR_WHEEL_CX, DIR_WHEEL_CY, DIR_WHEEL_RADIUS, wheelMode);
+
+    // 패턴 2: 드래그 릴리즈로 점프
+    if (this.jumpPattern === JumpPatternType.PATTERN_2) {
+      this.directionWheel.onPress(() => { this.showDirectionArrow = true; });
+      this.directionWheel.onRelease((holdDuration) => { this.handleJump(holdDuration); });
+    }
 
     // JUMP 버튼 배경 (정적 — 상태 갱신은 updateJumpButton에서)
     this.jumpButtonGraphics = this.add.graphics()
@@ -258,7 +253,18 @@ export class GameScene extends Phaser.Scene {
       JUMP_BTN_CY,
       JUMP_BTN_RADIUS + 20,
     );
-    // PATTERN_1은 방향 휠 release로 점프 — JUMP 버튼은 시각 효과만 유지
+
+    // 패턴 3: 버튼 누른 순간 휠 각도 확정 → 릴리즈 시 점프
+    if (this.jumpPattern === JumpPatternType.PATTERN_3) {
+      this.inputManager.onPress(() => {
+        this.capturedAngle = this.directionWheel.angle;
+        this.directionWheel.stop();
+        this.showDirectionArrow = true;
+      });
+      this.inputManager.onRelease((holdDuration) => {
+        this.handleJump(holdDuration);
+      });
+    }
 
     this.inputManager.disable();
     this.time.delayedCall(300, () => {
@@ -398,12 +404,18 @@ export class GameScene extends Phaser.Scene {
   private updateChargeIndicator(): void {
     this.chargeIndicator.clear();
 
-    const isPattern1 = this.jumpPattern === JumpPatternType.PATTERN_1;
-    if (!isPattern1 || !this.directionWheel.isDragging || !this.player.isOnGround || this.player.isDead || this.isGameOver) {
-      return;
-    }
+    const isDirectional = this.jumpPattern === JumpPatternType.PATTERN_2 ||
+                          this.jumpPattern === JumpPatternType.PATTERN_3;
+    if (!isDirectional || !this.player.isOnGround || this.player.isDead || this.isGameOver) return;
 
-    const duration = this.directionWheel.getDragDuration();
+    const isCharging = this.jumpPattern === JumpPatternType.PATTERN_2
+      ? this.directionWheel.isDragging
+      : this.inputManager.isPressed;
+    if (!isCharging) return;
+
+    const duration = this.jumpPattern === JumpPatternType.PATTERN_2
+      ? this.directionWheel.getDragDuration()
+      : this.inputManager.getChargeDuration();
     const t = Phaser.Math.Clamp(
       (duration - GAMEPLAY.JUMP_CHARGE_MIN_MS) /
         (GAMEPLAY.JUMP_CHARGE_MAX_MS - GAMEPLAY.JUMP_CHARGE_MIN_MS),
@@ -436,7 +448,7 @@ export class GameScene extends Phaser.Scene {
     this.directionArrow.clear();
 
     if (!this.player.isOnGround || this.player.isDead || this.isGameOver) return;
-    if (this.jumpPattern !== JumpPatternType.PATTERN_1) return;
+    if (this.jumpPattern !== JumpPatternType.PATTERN_2 && this.jumpPattern !== JumpPatternType.PATTERN_3) return;
     if (!this.showDirectionArrow) return;
 
     const angle = this.directionWheel.angle;
@@ -487,11 +499,10 @@ export class GameScene extends Phaser.Scene {
   private handleJump(chargeDuration: number): void {
     if (!this.player.isOnGround || this.player.isDead) return;
 
-    // TODO: 테스트 완료 후 아래 주석 교체
-    // 랜덤: this.jumpPattern = Phaser.Math.RND.pick([JumpPatternType.PATTERN_1, JumpPatternType.PATTERN_2]);
-    this.jumpPattern = JumpPatternType.PATTERN_1; // 테스트: 방향 휠 항상 활성
-
-    this.debugPatternText.setText(`JUMP: ${this.jumpPattern}`);
+    // 패턴 3: 버튼 누른 순간 확정된 각도 / 패턴 2: 드래그 릴리즈 시의 휠 각도
+    const angle = this.jumpPattern === JumpPatternType.PATTERN_3
+      ? this.capturedAngle
+      : this.directionWheel.angle;
 
     const jumped = this.jumpSystem.jump(
       this.player,
@@ -499,7 +510,7 @@ export class GameScene extends Phaser.Scene {
       this.currentCloudId,
       chargeDuration,
       this.jumpPattern,
-      this.directionWheel.angle,
+      angle,
     );
 
     if (jumped) {
@@ -520,9 +531,9 @@ export class GameScene extends Phaser.Scene {
     this.player.y = cloud.topY - this.player.HALF_H;
     this.currentCloudId = cloud.id;
 
-    // 착지 시 화살표 숨기고 방향 초기화
+    // 착지 시 화살표 숨기고 휠 상태 복원
     this.showDirectionArrow = false;
-    this.directionWheel.resetAngle();
+    this.resetWheelOnLand();
 
     if (cloud.id !== prevId) {
       this.scoreSystem.onLand();
@@ -534,8 +545,22 @@ export class GameScene extends Phaser.Scene {
       this.player.isDead = false;
       this._physicsGravity = false;
       this.time.delayedCall(300, () => {
-        if (!this.isGameOver) this.inputManager.enable();
+        if (!this.isGameOver) {
+          this.inputManager.enable();
+          if (this.jumpPattern === JumpPatternType.PATTERN_2) this.directionWheel.enable();
+        }
       });
+    }
+  }
+
+  /** 착지 시 패턴별 휠 상태 복원 */
+  private resetWheelOnLand(): void {
+    if (this.jumpPattern === JumpPatternType.PATTERN_2) {
+      this.directionWheel.resetAngle(); // 드래그 핸들 중앙 복귀
+      // 패턴 2: 드래그 시작 시 화살표 표시 (showDirectionArrow = false 유지)
+    } else {
+      this.directionWheel.resume(); // 진자 재개
+      this.showDirectionArrow = true; // 패턴 3: 진자 방향 항상 표시
     }
   }
 
@@ -555,6 +580,7 @@ export class GameScene extends Phaser.Scene {
 
     this.inputManager.disable();
     this.audioManager.stopBgm();
+    if (this.jumpPattern === JumpPatternType.PATTERN_2) this.directionWheel.disable();
 
     // 0.3초 대기 후 살짝 위로 튀어 오르며 중력 낙하 시작
     this.time.delayedCall(300, () => {
@@ -578,7 +604,7 @@ export class GameScene extends Phaser.Scene {
     this.events.emit(EVENTS.GAME_OVER);
 
     this.time.delayedCall(delay, () => {
-      this.scene.start(SCENE_KEYS.RESULT, { score: { ...score }, isNewBest });
+      this.scene.start(SCENE_KEYS.RESULT, { score: { ...score }, isNewBest, pattern: this.jumpPattern });
     });
   }
 
@@ -590,7 +616,6 @@ export class GameScene extends Phaser.Scene {
       this._onVisibilityChange = null;
     }
     this.hud?.destroy();
-    this.debugPatternText?.destroy();
     this.directionWheel?.destroy();
     this.inputManager?.destroy();
     this.movementSystem?.clear();
