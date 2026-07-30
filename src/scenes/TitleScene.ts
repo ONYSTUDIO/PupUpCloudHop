@@ -18,7 +18,7 @@ const PATTERN_NAMES: Record<string, string> = {
 
 export class TitleScene extends Phaser.Scene {
   private saveManager!: SaveManager;
-  private selectedPattern: JumpPatternType = JumpPatternType.PATTERN_1;
+  private selectedPattern: JumpPatternType = JumpPatternType.PATTERN_3;
   private patternLabel!: Phaser.GameObjects.Text;
 
   constructor() {
