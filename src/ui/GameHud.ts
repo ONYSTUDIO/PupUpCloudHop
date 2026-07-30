@@ -7,8 +7,9 @@ export class GameHud {
   private scene: Phaser.Scene;
   private scoreText: Phaser.GameObjects.Text;
   private bestText: Phaser.GameObjects.Text;
+  private pauseBtn: Phaser.GameObjects.Text;
 
-  constructor(scene: Phaser.Scene, bestScore: number) {
+  constructor(scene: Phaser.Scene, bestScore: number, onTogglePause: () => void) {
     this.scene = scene;
 
     this.scoreText = scene.add
@@ -34,8 +35,7 @@ export class GameHud {
       .setScrollFactor(0)
       .setDepth(DEPTH.HUD);
 
-    // 일시정지 버튼 자리 (P1 구현)
-    scene.add
+    this.pauseBtn = scene.add
       .text(BASE_WIDTH - 56, 72, '⏸', {
         fontSize: '58px',
         color: '#ffffff',
@@ -44,9 +44,16 @@ export class GameHud {
       .setOrigin(0.5, 0)
       .setScrollFactor(0)
       .setDepth(DEPTH.HUD)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', onTogglePause)
+      .on('pointerover', () => this.pauseBtn.setAlpha(1))
+      .on('pointerout',  () => this.pauseBtn.setAlpha(0.7));
 
     this.scene.events.on(EVENTS.SCORE_UPDATE, this.onScoreUpdate, this);
+  }
+
+  setPaused(paused: boolean): void {
+    this.pauseBtn.setText(paused ? '▶' : '⏸');
   }
 
   private onScoreUpdate(data: ScoreData): void {
@@ -58,5 +65,6 @@ export class GameHud {
     this.scene.events.off(EVENTS.SCORE_UPDATE, this.onScoreUpdate, this);
     this.scoreText.destroy();
     this.bestText.destroy();
+    this.pauseBtn.destroy();
   }
 }

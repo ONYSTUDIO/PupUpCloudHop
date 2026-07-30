@@ -47,6 +47,8 @@ export class GameScene extends Phaser.Scene {
   private chargeIndicator!: Phaser.GameObjects.Graphics;
   private jumpButtonGraphics!: Phaser.GameObjects.Graphics;
   private directionArrow!: Phaser.GameObjects.Graphics;
+  private pauseOverlayBg!: Phaser.GameObjects.Rectangle;
+  private pauseOverlayText!: Phaser.GameObjects.Text;
 
   // 패턴별 버튼 위치 (setupBottomControls에서 결정)
   private jumpBtnCX: number = 0;
@@ -58,6 +60,7 @@ export class GameScene extends Phaser.Scene {
   private jumpedFromId: string = '';
   private jumpTime: number = 0;
   private isGameOver: boolean = false;
+  private isPaused: boolean = false;
   private jumpPattern: JumpPatternType = JumpPatternType.PATTERN_3;
   private landingOffsetX: number = 0;
   private showDirectionArrow: boolean = true;
@@ -74,6 +77,7 @@ export class GameScene extends Phaser.Scene {
   create(data?: { pattern?: JumpPatternType }): void {
     this.jumpPattern = data?.pattern ?? JumpPatternType.PATTERN_3;
     this.isGameOver = false;
+    this.isPaused = false;
     this._physicsGravity = false;
     this._parabolicJump = false;
     this.clouds = [];
@@ -91,7 +95,7 @@ export class GameScene extends Phaser.Scene {
     this.collisionSystem = new CollisionSystem();
     this.scoreSystem = new ScoreSystem(this, this.saveManager.getBestScore());
     this.obstacleSystem = new ObstacleSystem(this, this.time.now);
-    this.hud = new GameHud(this, this.saveManager.getBestScore());
+    this.hud = new GameHud(this, this.saveManager.getBestScore(), () => this.togglePause());
 
     this.setupBackground();
     this.createClouds();
@@ -104,11 +108,27 @@ export class GameScene extends Phaser.Scene {
     this.chargeIndicator = this.add.graphics().setDepth(DEPTH.PLAYER + 1);
     this.directionArrow = this.add.graphics().setDepth(DEPTH.PLAYER + 1);
 
+    this.pauseOverlayBg = this.add
+      .rectangle(BASE_WIDTH / 2, BASE_HEIGHT / 2, BASE_WIDTH, BASE_HEIGHT, 0x000000, 0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.HUD + 10)
+      .setVisible(false);
+
+    this.pauseOverlayText = this.add
+      .text(BASE_WIDTH / 2, BASE_HEIGHT / 2, '일시정지', {
+        fontSize: '100px', fontStyle: 'bold',
+        color: '#ffffff', stroke: '#003399', strokeThickness: 10,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.HUD + 11)
+      .setVisible(false);
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
   }
 
   update(_time: number, delta: number): void {
-    if (this.isGameOver) return;
+    if (this.isGameOver || this.isPaused) return;
 
     const dt = delta / 1000;
     const scrollY = this.cameras.main.scrollY;
@@ -690,6 +710,30 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  private togglePause(): void {
+    if (this.isGameOver) return;
+    this.isPaused = !this.isPaused;
+
+    const isDragPattern = this.jumpPattern === JumpPatternType.PATTERN_1 ||
+                          this.jumpPattern === JumpPatternType.PATTERN_2;
+
+    if (this.isPaused) {
+      this.inputManager.disable();
+      if (isDragPattern) this.directionWheel.disable();
+      this.pauseOverlayBg.setVisible(true);
+      this.pauseOverlayText.setVisible(true);
+    } else {
+      if (!this.player.isDead) {
+        this.inputManager.enable();
+        if (isDragPattern) this.directionWheel.enable();
+      }
+      this.pauseOverlayBg.setVisible(false);
+      this.pauseOverlayText.setVisible(false);
+    }
+
+    this.hud.setPaused(this.isPaused);
+  }
+
   private triggerGameOver(delay: number = 1000): void {
     if (this.isGameOver) return;
     this.isGameOver = true;
@@ -727,5 +771,7 @@ export class GameScene extends Phaser.Scene {
     this.chargeIndicator?.destroy();
     this.directionArrow?.destroy();
     this.jumpButtonGraphics?.destroy();
+    this.pauseOverlayBg?.destroy();
+    this.pauseOverlayText?.destroy();
   }
 }
