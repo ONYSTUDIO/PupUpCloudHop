@@ -21,8 +21,20 @@ export const DEPTH = {
   DECOR_CLOUD: 1,
   CLOUD_ISLAND: 2,
   OBSTACLE: 5,
+  ITEM: 7,
   PLAYER: 10,
   HUD: 20,
+} as const;
+
+// 별 아이템 / 로켓 모드 설정
+export const ITEM_CONFIG = {
+  STAR_SPAWN_EVERY_N_CLOUDS: 2, // N번째 구름마다 별 1개 등장 (패턴1 구름 기준)
+  STAR_OUTER_RADIUS: 32,
+  STAR_INNER_RADIUS: 14,
+  STAR_HOVER_Y: 82,             // 구름 상단 표면 위로 띄우는 높이 (px)
+  ROCKET_DURATION_SEC: 3,       // 로켓 모드 지속 시간 (초)
+  ROCKET_SPEED: 1000,           // 로켓 상승 속도 (px/s)
+  ROCKET_END_VY: -180,          // 로켓 종료 후 초기 상승 속도
 } as const;
 
 // 동적 구름 스폰 / 디스폰 설정
@@ -43,6 +55,12 @@ export const SPAWN_CONFIG = {
   PATTERN_THRESHOLD: 5,
   // 패턴 2 배치 실패 시 재시도 횟수
   MAX_PATTERN_CREATE_RETRY: 10,
+  // 패턴 2 등장 확률 (0~1). 기존 50% → 낮춰서 빈도 조절
+  PATTERN_2_CHANCE: 0.30,
+  // 패턴 2 이후 최소 패턴 1 개수 (연속 방지 + 호흡 구간 확보)
+  PATTERN_2_MIN_GAP: 3,
+  // 패턴 2 진입 시 추가 Y 간격 (보텍스 하단 구름이 이전 구름과 충분히 떨어지도록)
+  PATTERN_2_ENTRY_EXTRA: 130,
 } as const;
 
 // 장애물 설정

@@ -7,13 +7,14 @@ import { PlatformMovementSystem } from '@systems/PlatformMovementSystem';
 import { ScoreSystem } from '@systems/ScoreSystem';
 import { SpawnSystem } from '@systems/SpawnSystem';
 import { ObstacleSystem } from '@systems/ObstacleSystem';
+import { StarItemSystem } from '@systems/StarItemSystem';
 import { AudioManager } from '@managers/AudioManager';
 import { InputManager } from '@managers/InputManager';
 import { SaveManager } from '@managers/SaveManager';
 import { GameHud } from '@ui/GameHud';
 import { DirectionWheel } from '@ui/DirectionWheel';
 import { JumpPatternType } from '@game-types/game';
-import { SCENE_KEYS, DEPTH, EVENTS, INITIAL_CLOUD_LAYOUT } from '@config/constants';
+import { SCENE_KEYS, DEPTH, EVENTS, INITIAL_CLOUD_LAYOUT, ITEM_CONFIG } from '@config/constants';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 import { GAMEPLAY } from '@config/gameplayConfig';
 
@@ -35,6 +36,7 @@ export class GameScene extends Phaser.Scene {
   private scoreSystem!: ScoreSystem;
   private spawnSystem!: SpawnSystem;
   private obstacleSystem!: ObstacleSystem;
+  private starItemSystem!: StarItemSystem;
 
   // 매니저 / UI
   private audioManager!: AudioManager;
@@ -47,6 +49,7 @@ export class GameScene extends Phaser.Scene {
   private chargeIndicator!: Phaser.GameObjects.Graphics;
   private jumpButtonGraphics!: Phaser.GameObjects.Graphics;
   private directionArrow!: Phaser.GameObjects.Graphics;
+  private rocketTrailGraphics!: Phaser.GameObjects.Graphics;
   private pauseOverlayBg!: Phaser.GameObjects.Rectangle;
   private pauseOverlayText!: Phaser.GameObjects.Text;
 
@@ -68,6 +71,14 @@ export class GameScene extends Phaser.Scene {
   private _parabolicJump: boolean = false;    // 패턴 1 비행 중 중력
   private capturedAngle: number = -Math.PI / 2; // 패턴 3 전용: 버튼 누른 순간 각도
 
+  // 로켓 모드
+  private isRocketMode: boolean = false;
+  private rocketTimer: number = 0;
+  private rocketLanding: boolean = false;       // 3초 이후 착지 탐색 단계
+  private rocketLandTarget: CloudIsland | null = null;
+  private rocketLandTimeout: number = 0;        // 착지 탐색 안전 타임아웃
+  private rocketPassedCloudIds: Set<string> = new Set();
+
   private _onVisibilityChange: (() => void) | null = null;
 
   constructor() {
@@ -80,6 +91,12 @@ export class GameScene extends Phaser.Scene {
     this.isPaused = false;
     this._physicsGravity = false;
     this._parabolicJump = false;
+    this.isRocketMode = false;
+    this.rocketTimer = 0;
+    this.rocketLanding = false;
+    this.rocketLandTarget = null;
+    this.rocketLandTimeout = 0;
+    this.rocketPassedCloudIds = new Set();
     this.clouds = [];
     this.currentCloudId = INITIAL_CLOUD_LAYOUT[0].id;
     this.jumpedFromId = '';
@@ -95,6 +112,7 @@ export class GameScene extends Phaser.Scene {
     this.collisionSystem = new CollisionSystem();
     this.scoreSystem = new ScoreSystem(this, this.saveManager.getBestScore());
     this.obstacleSystem = new ObstacleSystem(this, this.time.now);
+    this.starItemSystem = new StarItemSystem(this);
     this.hud = new GameHud(this, this.saveManager.getBestScore(), () => this.togglePause());
 
     this.setupBackground();
@@ -107,6 +125,7 @@ export class GameScene extends Phaser.Scene {
 
     this.chargeIndicator = this.add.graphics().setDepth(DEPTH.PLAYER + 1);
     this.directionArrow = this.add.graphics().setDepth(DEPTH.PLAYER + 1);
+    this.rocketTrailGraphics = this.add.graphics().setDepth(DEPTH.PLAYER - 1);
 
     this.pauseOverlayBg = this.add
       .rectangle(BASE_WIDTH / 2, BASE_HEIGHT / 2, BASE_WIDTH, BASE_HEIGHT, 0x000000, 0.5)
@@ -138,7 +157,19 @@ export class GameScene extends Phaser.Scene {
     this.spawnSystem.updateVortexPositions(delta);
     this.directionWheel.update(delta);
 
-    // 2. 장애물 업데이트 (새떼 + 번개)
+    // 2. 별 아이템 업데이트
+    this.starItemSystem.update(delta, scrollY);
+
+    // ── 로켓 모드 분기 ──────────────────────────────────────
+    if (this.isRocketMode) {
+      this.updateRocketMode(dt);
+      this.updateSpawn();
+      this.player.sync();
+      this.updateCamera();
+      return;
+    }
+
+    // 3. 장애물 업데이트 (새떼 + 번개)
     this.obstacleSystem.update(delta, this.time.now, scrollY);
     this.checkObstacleCollisions();
 
@@ -152,10 +183,10 @@ export class GameScene extends Phaser.Scene {
       this.clouds.find((c) => c.id === stormHitId)?.startFalling();
     }
 
-    // 3. 동적 스폰 / 디스폰
+    // 4. 동적 스폰 / 디스폰
     this.updateSpawn();
 
-    // 4. 플레이어 물리 / 위치 처리
+    // 5. 플레이어 물리 / 위치 처리
     if (this.player.isOnGround) {
       this.followCurrentCloud();
     } else {
@@ -164,19 +195,19 @@ export class GameScene extends Phaser.Scene {
       this.checkFallDeath();
     }
 
-    // 5. 그래픽 동기화
+    // 6. 그래픽 동기화
     this.player.sync();
 
-    // 6. 충전 표시 (PATTERN_1 전용)
+    // 7. 충전 표시 (PATTERN_1 전용)
     this.updateChargeIndicator();
 
-    // 7. 방향 화살표
+    // 8. 방향 화살표
     this.updateDirectionArrow();
 
-    // 8. JUMP 버튼 시각 상태
+    // 9. JUMP 버튼 시각 상태
     this.updateJumpButton();
 
-    // 9. 카메라
+    // 10. 카메라
     this.updateCamera();
   }
 
@@ -227,10 +258,13 @@ export class GameScene extends Phaser.Scene {
     const initialScrollY = 0;
     let safetyLimit = 30;
     while (this.spawnSystem.needsSpawn(initialScrollY) && safetyLimit-- > 0) {
-      for (const cloud of this.spawnSystem.spawnNext(this)) {
+      const batch = this.spawnSystem.spawnNext(this);
+      for (const cloud of batch) {
         this.clouds.push(cloud);
         this.movementSystem.register(cloud);
       }
+      // 패턴1 구름(단독 스폰)만 별 후보로 등록
+      if (batch.length === 1) this.starItemSystem.onPattern1CloudSpawned(batch[0]!);
     }
   }
 
@@ -383,10 +417,13 @@ export class GameScene extends Phaser.Scene {
 
     let spawnsThisFrame = 0;
     while (this.spawnSystem.needsSpawn(scrollY) && spawnsThisFrame < 2) {
-      for (const cloud of this.spawnSystem.spawnNext(this)) {
+      const batch = this.spawnSystem.spawnNext(this);
+      for (const cloud of batch) {
         this.clouds.push(cloud);
         this.movementSystem.register(cloud);
       }
+      // 패턴1 구름(단독 스폰)만 별 후보로 등록
+      if (batch.length === 1) this.starItemSystem.onPattern1CloudSpawned(batch[0]!);
       spawnsThisFrame++;
     }
 
@@ -394,6 +431,7 @@ export class GameScene extends Phaser.Scene {
       scrollY, this.currentCloudId, this.clouds,
     );
     for (const cloud of removed) {
+      this.starItemSystem.onCloudRemoved(cloud); // 별이 붙어있으면 함께 제거
       this.movementSystem.unregister(cloud);
       cloud.destroy();
     }
@@ -653,6 +691,12 @@ export class GameScene extends Phaser.Scene {
       this.events.emit(EVENTS.SCORE_UPDATE, this.scoreSystem.getScore());
     }
 
+    // 별 착지 수집 — 해당 구름에 별이 있으면 로켓 모드 발동
+    if (this.starItemSystem.checkLanding(cloud)) {
+      this.startRocketMode();
+      return;
+    }
+
     // 풍선 충돌 낙하 중 착지 → 게임 계속
     if (this._physicsGravity) {
       this.player.isDead = false;
@@ -752,6 +796,197 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // ─── 로켓 모드 ─────────────────────────────────────────
+
+  private startRocketMode(): void {
+    this.isRocketMode = true;
+    this.rocketTimer = ITEM_CONFIG.ROCKET_DURATION_SEC;
+    this.rocketLanding = false;
+    this.rocketLandTarget = null;
+    this.rocketLandTimeout = 0;
+    this.rocketPassedCloudIds.clear();
+
+    this.player.isOnGround = false;
+    this.player.isDead = false;
+    this.player.vx = 0;
+    this.player.vy = 0;
+    this._parabolicJump = false;
+    this._physicsGravity = false;
+
+    this.inputManager.disable();
+    const isDragPattern = this.jumpPattern === JumpPatternType.PATTERN_1 ||
+                          this.jumpPattern === JumpPatternType.PATTERN_2;
+    if (isDragPattern) this.directionWheel.disable();
+
+    this.hud.showRocketTimer(this.rocketTimer);
+  }
+
+  private updateRocketMode(dt: number): void {
+    if (this.rocketLanding) {
+      // 착지 탐색 단계: 타깃 구름까지 계속 상승
+      this.player.y -= ITEM_CONFIG.ROCKET_SPEED * dt;
+      this.player.vx = 0;
+      this.player.vy = -ITEM_CONFIG.ROCKET_SPEED;
+      this.drawRocketTrail();
+      this.checkRocketCloudPass();
+
+      this.rocketLandTimeout -= dt;
+
+      if (this.rocketLandTarget) {
+        const margin = 55;
+        const horzOk =
+          this.player.x >= this.rocketLandTarget.leftX - margin &&
+          this.player.x <= this.rocketLandTarget.rightX + margin;
+        const reachedCloud = this.player.y <= this.rocketLandTarget.topY;
+
+        if (horzOk && reachedCloud) {
+          this.landAfterRocket(this.rocketLandTarget);
+          return;
+        }
+      }
+
+      if (this.rocketLandTimeout <= 0) {
+        this.endRocketMode(); // 안전 타임아웃: 중력 낙하로 전환
+      }
+      return;
+    }
+
+    // 활성 단계: 카운트다운
+    this.rocketTimer -= dt;
+
+    if (this.rocketTimer <= 0) {
+      const target = this.findNearestCloudAbove();
+      if (target) {
+        this.rocketLanding = true;
+        this.rocketLandTarget = target;
+        this.rocketLandTimeout = 2; // 최대 2초 추가 비행
+        this.hud.hideRocketTimer();
+      } else {
+        this.endRocketMode();
+      }
+      return;
+    }
+
+    // 직선 상승
+    this.player.y -= ITEM_CONFIG.ROCKET_SPEED * dt;
+    this.player.vx = 0;
+    this.player.vy = -ITEM_CONFIG.ROCKET_SPEED;
+    this.drawRocketTrail();
+    this.checkRocketCloudPass();
+    this.hud.updateRocketTimer(this.rocketTimer);
+  }
+
+  private endRocketMode(): void {
+    this.isRocketMode = false;
+    this.rocketTimer = 0;
+    this.rocketLanding = false;
+    this.rocketLandTarget = null;
+    this.rocketLandTimeout = 0;
+    this.rocketTrailGraphics.clear();
+    this.hud.hideRocketTimer();
+
+    // 로켓 종료 후 약한 상승→중력 낙하로 자연스럽게 전환
+    this.player.vy = ITEM_CONFIG.ROCKET_END_VY;
+    this.player.vx = 0;
+    this._physicsGravity = true;
+    this.jumpTime = this.time.now;
+    this.jumpedFromId = '';
+
+    this.time.delayedCall(250, () => {
+      if (!this.isGameOver && !this.player.isDead) {
+        this.inputManager.enable();
+        const isDragPattern = this.jumpPattern === JumpPatternType.PATTERN_1 ||
+                              this.jumpPattern === JumpPatternType.PATTERN_2;
+        if (isDragPattern) this.directionWheel.enable();
+      }
+    });
+  }
+
+  private drawRocketTrail(): void {
+    const g = this.rocketTrailGraphics;
+    g.clear();
+
+    const trailColors = [0xFF5500, 0xFF8800, 0xFFCC00, 0xFFEE66];
+    for (let i = 0; i < 7; i++) {
+      const t = i / 7;
+      const cy = this.player.y + 32 + i * 24;
+      const r = 13 * (1 - t * 0.65);
+      const alpha = 0.9 * (1 - t * 0.82);
+      const colorIdx = Math.min(Math.floor(t * trailColors.length), trailColors.length - 1);
+      g.fillStyle(trailColors[colorIdx]!, alpha);
+      g.fillCircle(this.player.x, cy, r);
+    }
+  }
+
+  private checkRocketCloudPass(): void {
+    for (const cloud of this.clouds) {
+      if (this.rocketPassedCloudIds.has(cloud.id)) continue;
+      if (cloud.id === this.currentCloudId) continue;
+      if (cloud.id === this.rocketLandTarget?.id) continue; // 착지 타깃은 handleLand()에서 스코어
+
+      // 플레이어가 구름 상단면을 통과했는지 (위로 지나쳤는지) 판정
+      const horzOverlap =
+        this.player.x >= cloud.leftX - 20 &&
+        this.player.x <= cloud.rightX + 20;
+      const vertPassed = this.player.top < cloud.topY;
+
+      if (horzOverlap && vertPassed) {
+        this.rocketPassedCloudIds.add(cloud.id);
+        this.scoreSystem.onLand(); // onLand()가 내부에서 SCORE_UPDATE 이벤트 발행
+      }
+    }
+  }
+
+  /** 플레이어 정면 상방 직선상에 있는 가장 가까운 구름 반환 */
+  private findNearestCloudAbove(): CloudIsland | null {
+    const playerTop = this.player.y - this.player.HALF_H;
+    let nearest: CloudIsland | null = null;
+    let nearestDist = Infinity;
+
+    for (const cloud of this.clouds) {
+      if (cloud.id === this.currentCloudId) continue;
+      if (cloud.isFalling) continue;
+      // 구름 상단이 플레이어 상단보다 위(작은 Y)에 있어야 함
+      if (cloud.topY >= playerTop) continue;
+      // 수평 겹침 — 직선 경로 내
+      const margin = 55;
+      if (this.player.x < cloud.leftX - margin || this.player.x > cloud.rightX + margin) continue;
+      // 가장 가까운(topY 가 가장 큰) 구름 선택
+      const dist = playerTop - cloud.topY;
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearest = cloud;
+      }
+    }
+
+    return nearest;
+  }
+
+  /** 로켓 착지 단계 완료 — 구름 위에 플레이어를 올려놓고 정상 착지 처리 */
+  private landAfterRocket(cloud: CloudIsland): void {
+    this.isRocketMode = false;
+    this.rocketLanding = false;
+    this.rocketLandTarget = null;
+    this.rocketLandTimeout = 0;
+    this.rocketTrailGraphics.clear();
+    this.hud.hideRocketTimer();
+
+    // 구름 상단에 스냅
+    this.player.y = cloud.topY - this.player.HALF_H;
+
+    this.handleLand(cloud);
+
+    // handleLand 의 일반 흐름에서는 입력을 재활성화하지 않으므로 여기서 처리
+    this.time.delayedCall(250, () => {
+      if (!this.isGameOver && !this.player.isDead) {
+        this.inputManager.enable();
+        const isDragPattern = this.jumpPattern === JumpPatternType.PATTERN_1 ||
+                              this.jumpPattern === JumpPatternType.PATTERN_2;
+        if (isDragPattern) this.directionWheel.enable();
+      }
+    });
+  }
+
   // ─── 씬 정리 ───────────────────────────────────────────
 
   shutdown(): void {
@@ -765,11 +1000,13 @@ export class GameScene extends Phaser.Scene {
     this.movementSystem?.clear();
     this.spawnSystem?.clearAll();
     this.obstacleSystem?.clearAll();
+    this.starItemSystem?.clearAll();
     this.clouds?.forEach((c) => c.destroy());
     this.clouds = [];
     this.player?.destroy();
     this.chargeIndicator?.destroy();
     this.directionArrow?.destroy();
+    this.rocketTrailGraphics?.destroy();
     this.jumpButtonGraphics?.destroy();
     this.pauseOverlayBg?.destroy();
     this.pauseOverlayText?.destroy();

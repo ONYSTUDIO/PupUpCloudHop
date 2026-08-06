@@ -21,6 +21,8 @@ export class SpawnSystem {
   private generatedPatternCount: number;
   private vortexGroups: VortexCloudGroup[] = [];
   private cloudIdCounter: number = 0;
+  // 패턴 2 연속 방지: 마지막 패턴 2 이후 생성된 패턴 1 개수
+  private cloudsSinceLastP2: number = SPAWN_CONFIG.PATTERN_2_MIN_GAP;
 
   constructor(
     initialTopY: number,
@@ -39,12 +41,19 @@ export class SpawnSystem {
   /** 다음 패턴을 생성하고 포함된 구름 목록을 반환한다 */
   spawnNext(scene: Phaser.Scene): CloudIsland[] {
     if (this.generatedPatternCount < SPAWN_CONFIG.PATTERN_THRESHOLD) {
+      this.cloudsSinceLastP2++;
       return [this.spawnPattern1(scene)];
     }
 
-    if (Phaser.Math.RND.pick([true, false])) {
+    const canTryP2 =
+      this.cloudsSinceLastP2 >= SPAWN_CONFIG.PATTERN_2_MIN_GAP &&
+      Phaser.Math.FloatBetween(0, 1) < SPAWN_CONFIG.PATTERN_2_CHANCE;
+
+    if (canTryP2) {
       return this.trySpawnPattern2(scene);
     }
+
+    this.cloudsSinceLastP2++;
     return [this.spawnPattern1(scene)];
   }
 
@@ -153,6 +162,8 @@ export class SpawnSystem {
       const result = this.tryCreateVortexGroup(scene);
       if (result !== null) return result;
     }
+    // 배치 실패 시 패턴 1로 대체 (쿨다운 카운터 유지)
+    this.cloudsSinceLastP2++;
     return [this.spawnPattern1(scene)];
   }
 
@@ -175,6 +186,8 @@ export class SpawnSystem {
     if (minCX >= maxCX) return null;
 
     const centerX = Phaser.Math.Between(Math.ceil(minCX), Math.floor(maxCX));
+    // 추가 간격: 보텍스 하단 구름(centerY + radiusY)이 이전 구름과 충분히 떨어지도록
+    this.nextSpawnY -= SPAWN_CONFIG.PATTERN_2_ENTRY_EXTRA;
     const centerY = this.nextSpawnY;
     const direction = Phaser.Math.RND.pick([1, -1]) as 1 | -1;
     const speed = Phaser.Math.FloatBetween(0.45, 0.75);
@@ -220,9 +233,10 @@ export class SpawnSystem {
       swirlGraphics,
     });
 
-    // 그룹 전체 높이(radiusY * 2) 만큼 + 여유 간격 확보 후 다음 스폰 위치 갱신
+    // 보텍스 상단(centerY - radiusY)에서 다음 구름까지 여유 간격 확보
     this.nextSpawnY -= radiusY + Phaser.Math.Between(280, 320);
     this.generatedPatternCount++;
+    this.cloudsSinceLastP2 = 0; // 쿨다운 리셋
     return clouds;
   }
 

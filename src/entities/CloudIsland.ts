@@ -126,6 +126,7 @@ export class CloudIsland {
 
   // ── 내부 / 호환용 ────────────────────────────────────────────
   get halfH(): number { return this._config.height / 2; }
+  get orbitCenterX(): number { return this._config.centerX; }
   get orbitCenterY(): number { return this._config.centerY; }
 
   destroy(): void {
