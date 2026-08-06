@@ -23,6 +23,8 @@ export class SpawnSystem {
   private cloudIdCounter: number = 0;
   // 패턴 2 연속 방지: 마지막 패턴 2 이후 생성된 패턴 1 개수
   private cloudsSinceLastP2: number = SPAWN_CONFIG.PATTERN_2_MIN_GAP;
+  // 중앙 구름 연속 방지: 직전 패턴 1 구름의 수평 존
+  private lastP1Zone: 'left' | 'center' | 'right' = 'left';
 
   constructor(
     initialTopY: number,
@@ -122,16 +124,47 @@ export class SpawnSystem {
 
   // ─── 패턴 1 ────────────────────────────────────────────
 
+  private getP1Zone(x: number): 'left' | 'center' | 'right' {
+    const third = this.baseWidth / 3;
+    if (x < third) return 'left';
+    if (x > third * 2) return 'right';
+    return 'center';
+  }
+
   private spawnPattern1(scene: Phaser.Scene): CloudIsland {
     const width = Phaser.Math.Between(190, 260);
     const height = Phaser.Math.Between(55, 68);
     const orbitRadiusX = Phaser.Math.Between(65, 120);
     const orbitRadiusY = Phaser.Math.Between(20, 40);
     const margin = orbitRadiusX + width / 2 + 30;
-    const centerX = Phaser.Math.Between(
-      Math.ceil(margin),
-      Math.floor(this.baseWidth - margin),
-    );
+    const lo = Math.ceil(margin);
+    const hi = Math.floor(this.baseWidth - margin);
+
+    // 직전 구름이 중앙 존이었으면 좌·우 존으로 강제 배치
+    let centerX: number;
+    if (this.lastP1Zone === 'center') {
+      const leftBound  = Math.floor(this.baseWidth / 3);
+      const rightBound = Math.ceil(this.baseWidth * 2 / 3);
+      const leftRange:  [number, number] = [lo, Math.min(leftBound, hi)];
+      const rightRange: [number, number] = [Math.max(rightBound, lo), hi];
+      const canLeft  = leftRange[0]  <= leftRange[1];
+      const canRight = rightRange[0] <= rightRange[1];
+
+      if (canLeft && canRight) {
+        centerX = Phaser.Math.RND.pick([true, false])
+          ? Phaser.Math.Between(leftRange[0],  leftRange[1])
+          : Phaser.Math.Between(rightRange[0], rightRange[1]);
+      } else if (canLeft) {
+        centerX = Phaser.Math.Between(leftRange[0], leftRange[1]);
+      } else if (canRight) {
+        centerX = Phaser.Math.Between(rightRange[0], rightRange[1]);
+      } else {
+        centerX = Phaser.Math.Between(lo, hi); // 마진 과대 시 폴백
+      }
+    } else {
+      centerX = Phaser.Math.Between(lo, hi);
+    }
+    this.lastP1Zone = this.getP1Zone(centerX);
 
     const cloud = new CloudIsland(scene, {
       id: `dc${this.cloudIdCounter++}`,
