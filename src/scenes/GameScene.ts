@@ -8,6 +8,7 @@ import { ScoreSystem } from '@systems/ScoreSystem';
 import { SpawnSystem } from '@systems/SpawnSystem';
 import { ObstacleSystem } from '@systems/ObstacleSystem';
 import { StarItemSystem } from '@systems/StarItemSystem';
+import { ShieldSystem } from '@systems/ShieldSystem';
 import { AudioManager } from '@managers/AudioManager';
 import { InputManager } from '@managers/InputManager';
 import { SaveManager } from '@managers/SaveManager';
@@ -37,6 +38,7 @@ export class GameScene extends Phaser.Scene {
   private spawnSystem!: SpawnSystem;
   private obstacleSystem!: ObstacleSystem;
   private starItemSystem!: StarItemSystem;
+  private shieldSystem!: ShieldSystem;
 
   // 매니저 / UI
   private audioManager!: AudioManager;
@@ -85,7 +87,7 @@ export class GameScene extends Phaser.Scene {
     super({ key: SCENE_KEYS.GAME });
   }
 
-  create(data?: { pattern?: JumpPatternType }): void {
+  create(data?: { pattern?: JumpPatternType; useShield?: boolean }): void {
     this.jumpPattern = data?.pattern ?? JumpPatternType.PATTERN_3;
     this.isGameOver = false;
     this.isPaused = false;
@@ -113,6 +115,7 @@ export class GameScene extends Phaser.Scene {
     this.scoreSystem = new ScoreSystem(this, this.saveManager.getBestScore());
     this.obstacleSystem = new ObstacleSystem(this, this.time.now);
     this.starItemSystem = new StarItemSystem(this);
+    this.shieldSystem = new ShieldSystem(this);
     this.hud = new GameHud(this, this.saveManager.getBestScore(), () => this.togglePause());
 
     this.setupBackground();
@@ -143,6 +146,8 @@ export class GameScene extends Phaser.Scene {
       .setDepth(DEPTH.HUD + 11)
       .setVisible(false);
 
+    if (data?.useShield) this.shieldSystem.activate();
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
   }
 
@@ -157,8 +162,9 @@ export class GameScene extends Phaser.Scene {
     this.spawnSystem.updateVortexPositions(delta);
     this.directionWheel.update(delta);
 
-    // 2. 별 아이템 업데이트
+    // 2. 별 아이템 / 방어막 업데이트
     this.starItemSystem.update(delta, scrollY);
+    this.shieldSystem.update(delta, this.player.x, this.player.y);
 
     // ── 로켓 모드 분기 ──────────────────────────────────────
     if (this.isRocketMode) {
@@ -180,7 +186,13 @@ export class GameScene extends Phaser.Scene {
       delta, this.time.now, scrollY, currentCloud,
     );
     if (stormHitId !== null) {
-      this.clouds.find((c) => c.id === stormHitId)?.startFalling();
+      // 방어막이 활성 상태이고 플레이어가 탑승 중인 구름이 번개에 맞은 경우 → 방어막 소모로 무효화
+      const isCurrentCloud = stormHitId === this.currentCloudId && this.player.isOnGround;
+      if (isCurrentCloud && this.shieldSystem.consume()) {
+        // 방어막 소모 — 구름 추락 없음
+      } else {
+        this.clouds.find((c) => c.id === stormHitId)?.startFalling();
+      }
     }
 
     // 4. 동적 스폰 / 디스폰
@@ -1001,6 +1013,7 @@ export class GameScene extends Phaser.Scene {
     this.spawnSystem?.clearAll();
     this.obstacleSystem?.clearAll();
     this.starItemSystem?.clearAll();
+    this.shieldSystem?.clearAll();
     this.clouds?.forEach((c) => c.destroy());
     this.clouds = [];
     this.player?.destroy();

@@ -20,6 +20,8 @@ export class TitleScene extends Phaser.Scene {
   private saveManager!: SaveManager;
   private selectedPattern: JumpPatternType = JumpPatternType.PATTERN_3;
   private patternLabel!: Phaser.GameObjects.Text;
+  private useShield: boolean = true;
+  private shieldCheckGraphics!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super({ key: SCENE_KEYS.TITLE });
@@ -31,6 +33,7 @@ export class TitleScene extends Phaser.Scene {
     this.addTitle();
     this.addBestScore();
     this.addPatternSelector();
+    this.addShieldToggle();
     this.addStartButton();
   }
 
@@ -179,11 +182,77 @@ export class TitleScene extends Phaser.Scene {
     this.patternLabel.setText(PATTERN_NAMES[this.selectedPattern] ?? '');
   }
 
+  // ─── 방어막 토글 (테스트 전용) ───────────────────────────
+
+  private addShieldToggle(): void {
+    const cx = BASE_WIDTH / 2;
+    const cy = BASE_HEIGHT * 0.845;
+    const panelW = 860;
+    const panelH = 100;
+
+    // 패널 배경
+    this.add
+      .rectangle(cx, cy, panelW, panelH, 0x001144, 0.50)
+      .setOrigin(0.5).setDepth(DEPTH.HUD - 1)
+      .setStrokeStyle(2, 0x4466cc, 0.5);
+
+    // 체크박스 그래픽
+    this.shieldCheckGraphics = this.add.graphics().setDepth(DEPTH.HUD);
+    this.drawShieldCheckbox();
+
+    // 체크박스 히트 영역
+    const checkSize = 52;
+    const checkX = cx - 340;
+    this.add
+      .rectangle(checkX, cy, checkSize, checkSize, 0xffffff, 0)
+      .setOrigin(0.5).setDepth(DEPTH.HUD)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => {
+        this.useShield = !this.useShield;
+        this.drawShieldCheckbox();
+      });
+
+    // 레이블
+    this.add
+      .text(cx - 300, cy, '🫧  방어막 사용  (테스트)', {
+        fontSize: '38px', color: '#aaccff',
+      })
+      .setOrigin(0, 0.5).setDepth(DEPTH.HUD);
+  }
+
+  private drawShieldCheckbox(): void {
+    const cx = BASE_WIDTH / 2;
+    const cy = BASE_HEIGHT * 0.845;
+    const checkX = cx - 340;
+    const s = 44;
+
+    const g = this.shieldCheckGraphics;
+    g.clear();
+
+    // 박스 배경
+    g.fillStyle(0x002266, 0.8);
+    g.fillRoundedRect(checkX - s / 2, cy - s / 2, s, s, 8);
+
+    // 테두리
+    g.lineStyle(2.5, this.useShield ? 0x66aaff : 0x445588, 0.9);
+    g.strokeRoundedRect(checkX - s / 2, cy - s / 2, s, s, 8);
+
+    // 체크 표시
+    if (this.useShield) {
+      g.lineStyle(4, 0x88ddff, 1);
+      g.beginPath();
+      g.moveTo(checkX - s * 0.28, cy + s * 0.02);
+      g.lineTo(checkX - s * 0.06, cy + s * 0.26);
+      g.lineTo(checkX + s * 0.32, cy - s * 0.22);
+      g.strokePath();
+    }
+  }
+
   // ─── 시작 버튼 ────────────────────────────────────────────
 
   private addStartButton(): void {
     const cx = BASE_WIDTH / 2;
-    const cy = BASE_HEIGHT * 0.88;
+    const cy = BASE_HEIGHT * 0.934;
 
     const btn = this.add
       .text(cx, cy, '  게임 시작  ', {
@@ -197,7 +266,10 @@ export class TitleScene extends Phaser.Scene {
     btn.on('pointerover', () => btn.setAlpha(0.85));
     btn.on('pointerout',  () => btn.setAlpha(1));
     btn.on('pointerdown', () =>
-      this.scene.start(SCENE_KEYS.GAME, { pattern: this.selectedPattern }),
+      this.scene.start(SCENE_KEYS.GAME, {
+        pattern: this.selectedPattern,
+        useShield: this.useShield,
+      }),
     );
 
     this.tweens.add({
