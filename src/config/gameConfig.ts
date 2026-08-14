@@ -4,9 +4,10 @@ import { PreloadScene } from '@scenes/PreloadScene';
 import { TitleScene } from '@scenes/TitleScene';
 import { GameScene } from '@scenes/GameScene';
 import { ResultScene } from '@scenes/ResultScene';
+import { BASE_WIDTH, BASE_HEIGHT } from './baseDimensions';
 
-export const BASE_WIDTH = 1080;
-export const BASE_HEIGHT = 1920;
+// 기존 코드가 @config/gameConfig 에서 import 하던 것을 그대로 유지
+export { BASE_WIDTH, BASE_HEIGHT };
 
 export const phaserConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,

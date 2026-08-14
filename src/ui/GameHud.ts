@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { ScoreData } from '@game-types/game';
 import { BASE_WIDTH } from '@config/gameConfig';
 import { EVENTS, DEPTH } from '@config/constants';
+import { UI_LAYOUT } from '@config/uiLayout';
 
 export class GameHud {
   private scene: Phaser.Scene;
@@ -14,8 +15,10 @@ export class GameHud {
   constructor(scene: Phaser.Scene, bestScore: number, onTogglePause: () => void) {
     this.scene = scene;
 
+    const { top, side } = UI_LAYOUT.hud;
+
     this.scoreText = scene.add
-      .text(BASE_WIDTH / 2, 64, '0', {
+      .text(BASE_WIDTH / 2, top + 24, '0', {
         fontSize: '108px',
         fontStyle: 'bold',
         color: '#ffffff',
@@ -27,7 +30,7 @@ export class GameHud {
       .setDepth(DEPTH.HUD);
 
     this.bestText = scene.add
-      .text(BASE_WIDTH / 2, 188, `BEST  ${bestScore}`, {
+      .text(BASE_WIDTH / 2, top + 148, `BEST  ${bestScore}`, {
         fontSize: '46px',
         color: '#ffe066',
         stroke: '#003399',
@@ -38,7 +41,7 @@ export class GameHud {
       .setDepth(DEPTH.HUD);
 
     this.pauseBtn = scene.add
-      .text(BASE_WIDTH - 56, 72, '⏸', {
+      .text(BASE_WIDTH - side - 32, top + 32, '⏸', {
         fontSize: '58px',
         color: '#ffffff',
       })

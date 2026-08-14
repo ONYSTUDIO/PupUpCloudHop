@@ -63,8 +63,8 @@ body {
   line-height: 1.6;
 }
 
-/* 가로 모드일 때만 안내 표시 */
-@media screen and (orientation: landscape) and (max-height: 500px) {
+/* 가로 모드일 때만 안내 표시 — 터치스크린(모바일)에서만 트리거 */
+@media screen and (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
   #rotate-notice {
     display: flex;
   }

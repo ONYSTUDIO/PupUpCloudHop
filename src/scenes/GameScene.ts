@@ -14,16 +14,20 @@ import { InputManager } from '@managers/InputManager';
 import { SaveManager } from '@managers/SaveManager';
 import { GameHud } from '@ui/GameHud';
 import { DirectionWheel } from '@ui/DirectionWheel';
+import { ActionPanel } from '@ui/ActionPanel';
+import { MetaIconPanel } from '@ui/MetaIconPanel';
 import { JumpPatternType } from '@game-types/game';
 import { SCENE_KEYS, DEPTH, EVENTS, INITIAL_CLOUD_LAYOUT, ITEM_CONFIG } from '@config/constants';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 import { GAMEPLAY } from '@config/gameplayConfig';
+import { UI_LAYOUT } from '@config/uiLayout';
 
-// ─── 하단 버튼 공통 레이아웃 ─────────────────────────────────
-const BTN_PANEL_TOP    = 1680;           // 버튼 패널 상단 (게임/UI 경계)
-const BTN_CENTER_Y     = 1800;           // 버튼 중심 Y
+// ─── 버튼 컨트롤 크기 상수 ───────────────────────────────────
 const JUMP_BTN_RADIUS  = 120;
 const DIR_WHEEL_RADIUS = 145;
+
+// ─── UI 영역 디버그 표시 (확인 후 false 로 변경) ────────────
+const DEBUG_SHOW_UI_BOUNDS = true;
 
 export class GameScene extends Phaser.Scene {
   // 엔티티
@@ -46,6 +50,9 @@ export class GameScene extends Phaser.Scene {
   private saveManager!: SaveManager;
   private hud!: GameHud;
   private directionWheel!: DirectionWheel;
+  private actionPanel!: ActionPanel;
+  private leftMetaPanel!: MetaIconPanel;
+  private rightMetaPanel!: MetaIconPanel;
 
   // 그래픽
   private chargeIndicator!: Phaser.GameObjects.Graphics;
@@ -121,6 +128,7 @@ export class GameScene extends Phaser.Scene {
     this.setupBackground();
     this.createClouds();
     this.createPlayer();
+    this.setupUILayers();
     this.setupBottomControls();
     this.setupInput();
     this.setupCamera();
@@ -147,6 +155,8 @@ export class GameScene extends Phaser.Scene {
       .setVisible(false);
 
     if (data?.useShield) this.shieldSystem.activate();
+
+    if (DEBUG_SHOW_UI_BOUNDS) this.drawDebugUiBounds();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
   }
@@ -292,14 +302,86 @@ export class GameScene extends Phaser.Scene {
 
   private getPlayerHalfH(): number { return 28; }
 
-  /** 하단 컨트롤 UI 전체 구성 */
+  // ─── 디버그: UI 영역 경계선 시각화 ───────────────────────────
+
+  private drawDebugUiBounds(): void {
+    const g = this.add.graphics().setScrollFactor(0).setDepth(DEPTH.HUD - 1);
+
+    const label = (x: number, y: number, text: string, color: string): void => {
+      this.add.text(x, y, text, {
+        fontSize: '30px', fontStyle: 'bold',
+        color,
+        backgroundColor: '#000000bb',
+        padding: { x: 8, y: 4 },
+      }).setScrollFactor(0).setDepth(DEPTH.HUD + 1);
+    };
+
+    // ── HUD 영역 (상단) ────────────────────────────────────────
+    const hudAreaH = UI_LAYOUT.hud.top + 260;
+    g.fillStyle(0x00aaff, 0.10);
+    g.fillRect(0, 0, BASE_WIDTH, hudAreaH);
+    g.lineStyle(3, 0x00aaff, 0.9);
+    g.strokeRect(1, 1, BASE_WIDTH - 2, hudAreaH - 1);
+    label(UI_LAYOUT.hud.side, 4, `HUD  (0 ~ ${hudAreaH}px)`, '#00aaff');
+
+    // ── 우측 메타 아이콘 영역 ─────────────────────────────────
+    const slotCount = 3; // 예시: 3개 슬롯 높이
+    const metaColH = slotCount * (UI_LAYOUT.meta.iconSize + UI_LAYOUT.meta.gap);
+    const rightMetaX = BASE_WIDTH - UI_LAYOUT.meta.right - UI_LAYOUT.meta.iconSize;
+    const rightMetaW = UI_LAYOUT.meta.iconSize + UI_LAYOUT.meta.right;
+    g.fillStyle(0xffaa00, 0.12);
+    g.fillRect(rightMetaX, UI_LAYOUT.meta.top, rightMetaW, metaColH);
+    g.lineStyle(3, 0xffaa00, 0.9);
+    g.strokeRect(rightMetaX, UI_LAYOUT.meta.top, rightMetaW, metaColH);
+    label(rightMetaX + 4, UI_LAYOUT.meta.top + 4, 'RIGHT META', '#ffaa00');
+
+    // ── 좌측 메타 아이콘 영역 ─────────────────────────────────
+    const leftMetaW = UI_LAYOUT.meta.left + UI_LAYOUT.meta.iconSize;
+    g.fillStyle(0xffaa00, 0.12);
+    g.fillRect(0, UI_LAYOUT.meta.top, leftMetaW, metaColH);
+    g.lineStyle(3, 0xffaa00, 0.9);
+    g.strokeRect(0, UI_LAYOUT.meta.top, leftMetaW, metaColH);
+    label(UI_LAYOUT.meta.left + 4, UI_LAYOUT.meta.top + 4, 'LEFT META', '#ffaa00');
+
+    // ── 시작 구름 하단 안전선 ─────────────────────────────────
+    const safeLineY = this.actionPanel.top - UI_LAYOUT.startPlatform.bottomGap;
+    g.lineStyle(2, 0xffff00, 0.80);
+    for (let x = 0; x < BASE_WIDTH; x += 40) {
+      g.beginPath();
+      g.moveTo(x, safeLineY);
+      g.lineTo(Math.min(x + 22, BASE_WIDTH), safeLineY);
+      g.strokePath();
+    }
+    label(4, safeLineY - 48, `↑ 구름 하단 안전선  y=${safeLineY}`, '#ffff00');
+
+    // ── 액션 패널 영역 (하단) ─────────────────────────────────
+    g.fillStyle(0xff4466, 0.12);
+    g.fillRect(0, this.actionPanel.top, BASE_WIDTH, this.actionPanel.height);
+    g.lineStyle(3, 0xff4466, 0.9);
+    g.strokeRect(1, this.actionPanel.top, BASE_WIDTH - 2, this.actionPanel.height - 1);
+    label(
+      UI_LAYOUT.hud.side,
+      this.actionPanel.top + 8,
+      `ACTION PANEL  (top: ${this.actionPanel.top}px, h: ${this.actionPanel.height}px)`,
+      '#ff4466',
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+
+  /** UI 레이어 초기화: 좌/우 메타 아이콘 패널 생성. */
+  private setupUILayers(): void {
+    this.leftMetaPanel  = new MetaIconPanel(this, 'left');
+    this.rightMetaPanel = new MetaIconPanel(this, 'right');
+    // 향후 아이콘 추가 예시:
+    //   this.rightMetaPanel.addIcon(shopButton);
+  }
+
+  /** 하단 액션 패널 + 조작 컨트롤(방향 휠·점프 버튼) 구성 */
   private setupBottomControls(): void {
-    // ── 버튼 패널 배경 ───────────────────────────────────────
-    const panelG = this.add.graphics().setScrollFactor(0).setDepth(DEPTH.HUD - 2);
-    panelG.fillStyle(0x000510, 0.52);
-    panelG.fillRect(0, BTN_PANEL_TOP, BASE_WIDTH, BASE_HEIGHT - BTN_PANEL_TOP);
-    panelG.lineStyle(1.5, 0x4466bb, 0.5);
-    panelG.lineBetween(0, BTN_PANEL_TOP, BASE_WIDTH, BTN_PANEL_TOP);
+    // ── 액션 패널 배경 ───────────────────────────────────────
+    this.actionPanel = new ActionPanel(this);
+    const btnCY = this.actionPanel.centerY; // 버튼 컨트롤 수직 중심
 
     // ── 패턴별 버튼 배치 결정 ────────────────────────────────
     const isDragPattern = this.jumpPattern === JumpPatternType.PATTERN_1 ||
@@ -311,23 +393,23 @@ export class GameScene extends Phaser.Scene {
     if (this.jumpPattern === JumpPatternType.PATTERN_2) {
       // 방향 휠만 중앙
       wheelX = BASE_WIDTH / 2;
-      wheelY = BTN_CENTER_Y;
+      wheelY = btnCY;
       this.jumpBtnCX = BASE_WIDTH / 2;
-      this.jumpBtnCY = BTN_CENTER_Y;
+      this.jumpBtnCY = btnCY;
       this.showJumpBtn = false;
     } else if (this.jumpPattern === JumpPatternType.PATTERN_3) {
       // 점프 버튼만 중앙, 휠은 숨김
       wheelX = BASE_WIDTH / 2;
-      wheelY = BTN_CENTER_Y;
+      wheelY = btnCY;
       this.jumpBtnCX = BASE_WIDTH / 2;
-      this.jumpBtnCY = BTN_CENTER_Y;
+      this.jumpBtnCY = btnCY;
       this.showJumpBtn = true;
     } else {
-      // 패턴 1: 휠 좌측, 점프 우측 (기존 배치)
+      // 패턴 1: 휠 좌측, 점프 우측
       wheelX = 220;
-      wheelY = BTN_CENTER_Y;
+      wheelY = btnCY;
       this.jumpBtnCX = BASE_WIDTH - 220;
-      this.jumpBtnCY = BTN_CENTER_Y;
+      this.jumpBtnCY = btnCY;
       this.showJumpBtn = true;
     }
 
@@ -347,7 +429,7 @@ export class GameScene extends Phaser.Scene {
       this.directionWheel.onRelease((holdDuration) => { this.handleJump(holdDuration); });
     }
 
-    // ── JUMP 버튼 배경 ───────────────────────────────────────
+    // ── JUMP 버튼 그래픽 ─────────────────────────────────────
     this.jumpButtonGraphics = this.add.graphics()
       .setScrollFactor(0)
       .setDepth(DEPTH.HUD);
@@ -1007,6 +1089,9 @@ export class GameScene extends Phaser.Scene {
       this._onVisibilityChange = null;
     }
     this.hud?.destroy();
+    this.actionPanel?.destroy();
+    this.leftMetaPanel?.destroy();
+    this.rightMetaPanel?.destroy();
     this.directionWheel?.destroy();
     this.inputManager?.destroy();
     this.movementSystem?.clear();

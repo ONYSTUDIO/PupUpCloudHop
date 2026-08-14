@@ -17,13 +17,15 @@ export const EVENTS = {
 } as const;
 
 export const DEPTH = {
-  BACKGROUND: 0,
+  BACKGROUND:  0,
   DECOR_CLOUD: 1,
   CLOUD_ISLAND: 2,
-  OBSTACLE: 5,
-  ITEM: 7,
-  PLAYER: 10,
-  HUD: 20,
+  OBSTACLE:    5,
+  ITEM:        7,
+  PLAYER:     10,
+  EFFECT:     20,  // 파티클·이펙트
+  HUD:       100,  // 모든 UI 오버레이 (HUD, 메타 아이콘, 버튼 패널)
+  POPUP:     200,  // 팝업·모달
 } as const;
 
 // 별 아이템 / 로켓 모드 설정
@@ -89,7 +91,9 @@ export const OBSTACLE_CONFIG = {
 // 초기 구름섬 배치 — 프로토타입용 고정 레이아웃
 // world Y 는 0(상단) → 1920(하단). 플레이어는 아래서 위로 올라간다.
 export const INITIAL_CLOUD_LAYOUT = [
-  { id: 'c0', centerX: 540, centerY: 1570, orbitRadiusX: 75,  orbitRadiusY: 22, orbitSpeed: 0.55, startAngle: 0,              rotationDirection:  1 as const, width: 280, height: 72 },
+  // centerY: ACTION_AREA_TOP(1680) - bottomGap(60) - orbitRadiusY(22) - balloon_tip_local(128) = 1470
+  // 풍선 꼭지(+128px)가 구름 body 하단(+36px)보다 훨씬 아래까지 내려오므로 balloon 기준으로 계산
+  { id: 'c0', centerX: 540, centerY: 1470, orbitRadiusX: 75,  orbitRadiusY: 22, orbitSpeed: 0.55, startAngle: 0,              rotationDirection:  1 as const, width: 280, height: 72 },
   { id: 'c1', centerX: 260, centerY: 1360, orbitRadiusX: 100, orbitRadiusY: 32, orbitSpeed: 0.80, startAngle: Math.PI / 3,     rotationDirection: -1 as const, width: 230, height: 64 },
   { id: 'c2', centerX: 770, centerY: 1060, orbitRadiusX: 115, orbitRadiusY: 38, orbitSpeed: 0.70, startAngle: Math.PI,         rotationDirection:  1 as const, width: 245, height: 66 },
   { id: 'c3', centerX: 380, centerY:  760, orbitRadiusX: 90,  orbitRadiusY: 28, orbitSpeed: 0.95, startAngle: Math.PI / 2,     rotationDirection: -1 as const, width: 210, height: 60 },
