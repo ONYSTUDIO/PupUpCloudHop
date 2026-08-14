@@ -27,7 +27,7 @@ const JUMP_BTN_RADIUS  = 120;
 const DIR_WHEEL_RADIUS = 145;
 
 // ─── UI 영역 디버그 표시 (확인 후 false 로 변경) ────────────
-const DEBUG_SHOW_UI_BOUNDS = true;
+const DEBUG_SHOW_UI_BOUNDS = false;
 
 export class GameScene extends Phaser.Scene {
   // 엔티티
