@@ -45,6 +45,7 @@ export interface SaveData {
   soundEnabled: boolean;
   vibrationEnabled: boolean;
   coins: number;
+  diamonds: number;
   ownedSkins: string[];
   equippedSkin: string;
 }

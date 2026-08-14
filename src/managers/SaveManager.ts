@@ -35,6 +35,7 @@ const DEFAULT_SAVE: SaveData = {
   soundEnabled: true,
   vibrationEnabled: true,
   coins: 0,
+  diamonds: 0,
   ownedSkins: ['dog_default'],
   equippedSkin: 'dog_default',
 };
@@ -53,6 +54,7 @@ export class SaveManager {
   isVibrationEnabled(): boolean { return this.data.vibrationEnabled; }
 
   getCoins(): number { return this.data.coins; }
+  getDiamonds(): number { return this.data.diamonds; }
   getOwnedSkins(): string[] { return [...this.data.ownedSkins]; }
   getEquippedSkin(): string { return this.data.equippedSkin; }
 
@@ -65,6 +67,25 @@ export class SaveManager {
     if (this.data.coins < amount) return false;
     this.data.coins -= amount;
     this.persist();
+    return true;
+  }
+
+  addDiamonds(amount: number): void {
+    this.data.diamonds = Math.max(0, this.data.diamonds + amount);
+    this.persist();
+  }
+
+  spendDiamonds(amount: number): boolean {
+    if (this.data.diamonds < amount) return false;
+    this.data.diamonds -= amount;
+    this.persist();
+    return true;
+  }
+
+  /** 다이아몬드 1개 = 코인 150개, 단방향 교환 */
+  exchangeDiamondsToCoins(diamondAmount: number): boolean {
+    if (!this.spendDiamonds(diamondAmount)) return false;
+    this.addCoins(diamondAmount * 150);
     return true;
   }
 
