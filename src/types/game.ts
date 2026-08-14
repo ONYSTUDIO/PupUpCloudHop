@@ -44,6 +44,9 @@ export interface SaveData {
   gamesPlayed: number;
   soundEnabled: boolean;
   vibrationEnabled: boolean;
+  coins: number;
+  ownedSkins: string[];
+  equippedSkin: string;
 }
 
-export type SceneKey = 'BootScene' | 'PreloadScene' | 'TitleScene' | 'GameScene' | 'ResultScene';
+export type SceneKey = 'BootScene' | 'PreloadScene' | 'TitleScene' | 'GameScene' | 'ResultScene' | 'ShopScene';

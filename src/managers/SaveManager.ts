@@ -34,6 +34,9 @@ const DEFAULT_SAVE: SaveData = {
   gamesPlayed: 0,
   soundEnabled: true,
   vibrationEnabled: true,
+  coins: 0,
+  ownedSkins: ['dog_default'],
+  equippedSkin: 'dog_default',
 };
 
 export class SaveManager {
@@ -48,6 +51,36 @@ export class SaveManager {
   getBestScore(): number { return this.data.bestScore; }
   isSoundEnabled(): boolean { return this.data.soundEnabled; }
   isVibrationEnabled(): boolean { return this.data.vibrationEnabled; }
+
+  getCoins(): number { return this.data.coins; }
+  getOwnedSkins(): string[] { return [...this.data.ownedSkins]; }
+  getEquippedSkin(): string { return this.data.equippedSkin; }
+
+  addCoins(amount: number): void {
+    this.data.coins = Math.max(0, this.data.coins + amount);
+    this.persist();
+  }
+
+  spendCoins(amount: number): boolean {
+    if (this.data.coins < amount) return false;
+    this.data.coins -= amount;
+    this.persist();
+    return true;
+  }
+
+  buySkin(skinId: string): void {
+    if (!this.data.ownedSkins.includes(skinId)) {
+      this.data.ownedSkins.push(skinId);
+    }
+    this.persist();
+  }
+
+  equipSkin(skinId: string): void {
+    if (this.data.ownedSkins.includes(skinId)) {
+      this.data.equippedSkin = skinId;
+      this.persist();
+    }
+  }
 
   setSoundEnabled(enabled: boolean): void {
     this.data.soundEnabled = enabled;

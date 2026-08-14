@@ -4,6 +4,7 @@ export const SCENE_KEYS = {
   TITLE: 'TitleScene',
   GAME: 'GameScene',
   RESULT: 'ResultScene',
+  SHOP: 'ShopScene',
 } as const;
 
 export const STORAGE_KEYS = {

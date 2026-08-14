@@ -4,6 +4,7 @@ import { PreloadScene } from '@scenes/PreloadScene';
 import { TitleScene } from '@scenes/TitleScene';
 import { GameScene } from '@scenes/GameScene';
 import { ResultScene } from '@scenes/ResultScene';
+import { ShopScene } from '@scenes/ShopScene';
 import { BASE_WIDTH, BASE_HEIGHT } from './baseDimensions';
 
 // 기존 코드가 @config/gameConfig 에서 import 하던 것을 그대로 유지
@@ -20,7 +21,7 @@ export const phaserConfig: Phaser.Types.Core.GameConfig = {
     height: BASE_HEIGHT,
   },
   // 수동 물리 사용 — Arcade Physics 비활성화
-  scene: [BootScene, PreloadScene, TitleScene, GameScene, ResultScene],
+  scene: [BootScene, PreloadScene, TitleScene, GameScene, ResultScene, ShopScene],
   input: {
     activePointers: 2,
   },

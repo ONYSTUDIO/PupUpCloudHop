@@ -373,8 +373,53 @@ export class GameScene extends Phaser.Scene {
   private setupUILayers(): void {
     this.leftMetaPanel  = new MetaIconPanel(this, 'left');
     this.rightMetaPanel = new MetaIconPanel(this, 'right');
-    // 향후 아이콘 추가 예시:
-    //   this.rightMetaPanel.addIcon(shopButton);
+
+    this.rightMetaPanel.addIcon(this.createShopIcon());
+  }
+
+  /** 상점 아이콘 (임시 그래픽 — 추후 스프라이트 리소스로 교체 예정) */
+  private createShopIcon(): Phaser.GameObjects.Container {
+    const size = UI_LAYOUT.meta.iconSize;
+    const half = size / 2;
+
+    const container = this.add.container(0, 0);
+    container.setSize(size, size).setInteractive({ useHandCursor: true });
+
+    // 배경
+    const bg = this.add.graphics();
+    bg.fillStyle(0xffffff, 0.88);
+    bg.fillRoundedRect(-half, -half, size, size, 20);
+    bg.lineStyle(3, 0x88aaee, 1);
+    bg.strokeRoundedRect(-half, -half, size, size, 20);
+
+    // 장바구니 그래픽 (임시)
+    const cart = this.add.graphics();
+    cart.lineStyle(6, 0x2255cc, 1);
+    cart.fillStyle(0x2255cc, 1);
+    cart.strokeRect(-22, -18, 44, 30);        // 바구니 몸통
+    cart.beginPath();
+    cart.moveTo(-22, -18);
+    cart.lineTo(-32, -34);
+    cart.lineTo(-46, -34);
+    cart.strokePath();                          // 손잡이
+    cart.fillCircle(-12, 22, 8);               // 왼쪽 바퀴
+    cart.fillCircle(16, 22, 8);                // 오른쪽 바퀴
+
+    // 레이블
+    const label = this.add.text(0, half - 24, '상점', {
+      fontSize: '26px',
+      color: '#2255cc',
+      fontStyle: 'bold',
+    }).setOrigin(0.5, 0.5);
+
+    container.add([bg, cart, label]);
+
+    container.on('pointerdown', () => {
+      this.scene.launch(SCENE_KEYS.SHOP, { from: SCENE_KEYS.GAME });
+      this.scene.pause();
+    });
+
+    return container;
   }
 
   /** 하단 액션 패널 + 조작 컨트롤(방향 휠·점프 버튼) 구성 */
