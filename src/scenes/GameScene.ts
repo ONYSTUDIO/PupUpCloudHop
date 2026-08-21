@@ -12,6 +12,7 @@ import { ShieldSystem } from '@systems/ShieldSystem';
 import { AudioManager } from '@managers/AudioManager';
 import { InputManager } from '@managers/InputManager';
 import { SaveManager } from '@managers/SaveManager';
+import { authService } from '../services/AuthService';
 import { GameHud } from '@ui/GameHud';
 import { DirectionWheel } from '@ui/DirectionWheel';
 import { ActionPanel } from '@ui/ActionPanel';
@@ -123,7 +124,14 @@ export class GameScene extends Phaser.Scene {
     this.obstacleSystem = new ObstacleSystem(this, this.time.now);
     this.starItemSystem = new StarItemSystem(this);
     this.shieldSystem = new ShieldSystem(this);
-    this.hud = new GameHud(this, this.saveManager.getBestScore(), () => this.togglePause());
+    this.hud = new GameHud(
+      this,
+      this.saveManager.getBestScore(),
+      () => this.togglePause(),
+      this.saveManager.getCoins(),
+      this.saveManager.getDiamonds(),
+    );
+    void this.initHudProfile();
 
     this.setupBackground();
     this.createClouds();
@@ -915,6 +923,18 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.hud.setPaused(this.isPaused);
+  }
+
+  private async initHudProfile(): Promise<void> {
+    const user = await authService.getUser();
+    if (!user || !this.scene.isActive(SCENE_KEYS.GAME)) return;
+    const isGuest = user.is_anonymous === true;
+    const name = isGuest
+      ? '게스트'
+      : ((user.user_metadata?.['full_name'] as string | undefined)
+          ?? user.email
+          ?? '플레이어');
+    this.hud.updateProfile(name, isGuest);
   }
 
   private triggerGameOver(delay: number = 1000): void {
