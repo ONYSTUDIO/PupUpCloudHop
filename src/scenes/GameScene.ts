@@ -416,6 +416,7 @@ export class GameScene extends Phaser.Scene {
     this.rightMetaPanel = new MetaIconPanel(this, 'right');
 
     this.rightMetaPanel.addIcon(this.createShopIcon());
+    this.rightMetaPanel.addIcon(this.createRouletteIcon());
   }
 
   /** 상점 아이콘 (임시 그래픽 — 추후 스프라이트 리소스로 교체 예정) */
@@ -457,6 +458,79 @@ export class GameScene extends Phaser.Scene {
 
     container.on('pointerdown', () => {
       this.scene.launch(SCENE_KEYS.SHOP, { from: SCENE_KEYS.GAME });
+      this.scene.pause();
+    });
+
+    return container;
+  }
+
+  /** 룰렛 아이콘 (임시 그래픽 — 추후 스프라이트로 교체 예정) */
+  private createRouletteIcon(): Phaser.GameObjects.Container {
+    const size = UI_LAYOUT.meta.iconSize;
+    const half = size / 2;
+
+    const container = this.add.container(0, 0);
+    container.setSize(size, size).setInteractive({ useHandCursor: true });
+
+    // 배경
+    const bg = this.add.graphics();
+    bg.fillStyle(0xffffff, 0.88);
+    bg.fillRoundedRect(-half, -half, size, size, 20);
+    bg.lineStyle(3, 0xcc88ee, 1);
+    bg.strokeRoundedRect(-half, -half, size, size, 20);
+
+    // 룰렛 휠 임시 그래픽
+    const wheel = this.add.graphics();
+    const wCx = 0;
+    const wCy = -12;
+    const wR = 28;
+    const slotCount = 8;
+    const sliceAngle = (Math.PI * 2) / slotCount;
+    const wheelColors = [0x2255cc, 0xffcc00, 0xcc2222, 0x22aa66, 0x2255cc, 0xffcc00, 0xcc2222, 0x22aa66];
+    for (let i = 0; i < slotCount; i++) {
+      const sa = i * sliceAngle - Math.PI / 2;
+      const ea = sa + sliceAngle;
+      wheel.fillStyle(wheelColors[i]!, 1);
+      wheel.beginPath();
+      wheel.moveTo(wCx, wCy);
+      wheel.arc(wCx, wCy, wR, sa, ea, false);
+      wheel.closePath();
+      wheel.fillPath();
+    }
+    wheel.lineStyle(2, 0x333333, 0.8);
+    wheel.strokeCircle(wCx, wCy, wR);
+    wheel.fillStyle(0xffffff, 1);
+    wheel.fillCircle(wCx, wCy, 7);
+    wheel.fillStyle(0x333333, 1);
+    wheel.fillCircle(wCx, wCy, 4);
+
+    // 레이블
+    const label = this.add.text(0, half - 24, '룰렛', {
+      fontSize: '26px',
+      color: '#882299',
+      fontStyle: 'bold',
+    }).setOrigin(0.5, 0.5);
+
+    container.add([bg, wheel, label]);
+
+    // 무료 스핀 뱃지
+    const canFree = this.saveManager.canFreeRoulette();
+    if (canFree) {
+      const badgeBg = this.add.graphics();
+      badgeBg.fillStyle(0xee2222, 1);
+      badgeBg.fillRoundedRect(half - 52, -half, 52, 28, 8);
+
+      const badgeText = this.add.text(half - 26, -half + 14, 'FREE', {
+        fontSize: '20px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      }).setOrigin(0.5, 0.5);
+
+      container.add([badgeBg, badgeText]);
+    }
+
+    container.on('pointerdown', () => {
+      this.scene.launch(SCENE_KEYS.ROULETTE, { from: SCENE_KEYS.GAME });
       this.scene.pause();
     });
 

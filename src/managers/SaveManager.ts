@@ -38,6 +38,8 @@ const DEFAULT_SAVE: SaveData = {
   diamonds: 0,
   ownedSkins: ['dog_default'],
   equippedSkin: 'dog_default',
+  lastRouletteDate: '',
+  roulettePaidSpinsToday: 0,
 };
 
 export class SaveManager {
@@ -81,6 +83,53 @@ export class SaveManager {
     this.persist();
     return true;
   }
+
+  // ─── 룰렛 ────────────────────────────────────────────────
+
+  private todayString(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  /** 오늘 무료 스핀이 남아있으면 true */
+  canFreeRoulette(): boolean {
+    return this.data.lastRouletteDate !== this.todayString();
+  }
+
+  /** 무료 스핀 사용 기록 */
+  recordFreeRoulette(): void {
+    const today = this.todayString();
+    this.data.lastRouletteDate = today;
+    // 날짜가 바뀌면 유료 횟수도 리셋
+    this.data.roulettePaidSpinsToday = 0;
+    this.persist();
+  }
+
+  /** 오늘 사용한 유료 스핀 횟수 (0~3) */
+  getPaidRouletteSpinsToday(): number {
+    const today = this.todayString();
+    if (this.data.lastRouletteDate !== today) return 0;
+    return this.data.roulettePaidSpinsToday;
+  }
+
+  /**
+   * 유료 스핀 비용을 지불하고 기록. 성공 시 true.
+   * 비용: 1회째=2다이아, 2회째=3다이아, 3회째=5다이아
+   */
+  spendPaidRoulette(): boolean {
+    const costs = [2, 3, 5];
+    const used = this.getPaidRouletteSpinsToday();
+    if (used >= costs.length) return false;
+    const cost = costs[used]!;
+    if (!this.spendDiamonds(cost)) return false;
+    const today = this.todayString();
+    this.data.lastRouletteDate = today;
+    this.data.roulettePaidSpinsToday = used + 1;
+    this.persist();
+    return true;
+  }
+
+  // ─────────────────────────────────────────────────────────
 
   /** 다이아몬드 1개 = 코인 150개, 단방향 교환 */
   exchangeDiamondsToCoins(diamondAmount: number): boolean {

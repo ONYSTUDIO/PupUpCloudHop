@@ -48,6 +48,8 @@ export interface SaveData {
   diamonds: number;
   ownedSkins: string[];
   equippedSkin: string;
+  lastRouletteDate: string;       // 'YYYY-MM-DD' — 마지막 무료 스핀 날짜
+  roulettePaidSpinsToday: number; // 오늘 유료 스핀 횟수 (날짜 바뀌면 0 리셋)
 }
 
-export type SceneKey = 'BootScene' | 'PreloadScene' | 'TitleScene' | 'GameScene' | 'ResultScene' | 'ShopScene';
+export type SceneKey = 'BootScene' | 'PreloadScene' | 'TitleScene' | 'GameScene' | 'ResultScene' | 'ShopScene' | 'RouletteScene';
