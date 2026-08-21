@@ -927,11 +927,20 @@ export class GameScene extends Phaser.Scene {
 
     const score = this.scoreSystem.getScore();
     const isNewBest = this.saveManager.submitScore(score.current, score.jumps);
+    const coinsEarned = score.current * GAMEPLAY.COIN_PER_SCORE;
+    this.saveManager.addCoins(coinsEarned);
+    const totalCoins = this.saveManager.getCoins();
 
     this.events.emit(EVENTS.GAME_OVER);
 
     this.time.delayedCall(delay, () => {
-      this.scene.start(SCENE_KEYS.RESULT, { score: { ...score }, isNewBest, pattern: this.jumpPattern });
+      this.scene.start(SCENE_KEYS.RESULT, {
+        score: { ...score },
+        isNewBest,
+        pattern: this.jumpPattern,
+        coinsEarned,
+        totalCoins,
+      });
     });
   }
 
