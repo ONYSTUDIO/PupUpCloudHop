@@ -12,9 +12,12 @@ export class CollisionSystem {
     jumpTime: number,
     now: number,
     requireFalling = true,
+    landToleranceOverride?: number,
+    landToleranceX = 0,
   ): CloudIsland | null {
     if (requireFalling && player.vy <= 0) return null;
 
+    const tolerance = landToleranceOverride ?? GAMEPLAY.LAND_TOLERANCE_Y;
     const gracePassed = now - jumpTime > GAMEPLAY.JUMP_GRACE_MS;
     const pBottom = player.bottom;
     const pLeft = player.left;
@@ -25,9 +28,11 @@ export class CollisionSystem {
 
       const cloudTop = cloud.topY;
       const withinY =
-        pBottom >= cloudTop - GAMEPLAY.LAND_TOLERANCE_Y &&
-        pBottom <= cloudTop + GAMEPLAY.LAND_TOLERANCE_Y + 18;
-      const withinX = pLeft < cloud.rightX && pRight > cloud.leftX;
+        pBottom >= cloudTop - tolerance &&
+        pBottom <= cloudTop + tolerance + 18;
+      const withinX =
+        pLeft < cloud.rightX + landToleranceX &&
+        pRight > cloud.leftX - landToleranceX;
 
       if (withinY && withinX) {
         return cloud;

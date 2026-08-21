@@ -9,6 +9,7 @@ import { SpawnSystem } from '@systems/SpawnSystem';
 import { ObstacleSystem } from '@systems/ObstacleSystem';
 import { StarItemSystem } from '@systems/StarItemSystem';
 import { ShieldSystem } from '@systems/ShieldSystem';
+import { MagnetSystem } from '@systems/MagnetSystem';
 import { AudioManager } from '@managers/AudioManager';
 import { InputManager } from '@managers/InputManager';
 import { SaveManager } from '@managers/SaveManager';
@@ -44,6 +45,7 @@ export class GameScene extends Phaser.Scene {
   private obstacleSystem!: ObstacleSystem;
   private starItemSystem!: StarItemSystem;
   private shieldSystem!: ShieldSystem;
+  private magnetSystem!: MagnetSystem;
 
   // 매니저 / UI
   private audioManager!: AudioManager;
@@ -89,13 +91,18 @@ export class GameScene extends Phaser.Scene {
   private rocketLandTimeout: number = 0;        // 착지 탐색 안전 타임아웃
   private rocketPassedCloudIds: Set<string> = new Set();
 
+  // 자석 당기기
+  private isMagnetPulling: boolean = false;
+  private magnetPullTarget: CloudIsland | null = null;
+  private magnetPullTimer: number = 0;
+
   private _onVisibilityChange: (() => void) | null = null;
 
   constructor() {
     super({ key: SCENE_KEYS.GAME });
   }
 
-  create(data?: { pattern?: JumpPatternType; useShield?: boolean }): void {
+  create(data?: { pattern?: JumpPatternType; useShield?: boolean; useMagnet?: boolean }): void {
     this.jumpPattern = data?.pattern ?? JumpPatternType.PATTERN_3;
     this.isGameOver = false;
     this.isPaused = false;
@@ -107,6 +114,9 @@ export class GameScene extends Phaser.Scene {
     this.rocketLandTarget = null;
     this.rocketLandTimeout = 0;
     this.rocketPassedCloudIds = new Set();
+    this.isMagnetPulling = false;
+    this.magnetPullTarget = null;
+    this.magnetPullTimer = 0;
     this.clouds = [];
     this.currentCloudId = INITIAL_CLOUD_LAYOUT[0].id;
     this.jumpedFromId = '';
@@ -124,6 +134,7 @@ export class GameScene extends Phaser.Scene {
     this.obstacleSystem = new ObstacleSystem(this, this.time.now);
     this.starItemSystem = new StarItemSystem(this);
     this.shieldSystem = new ShieldSystem(this);
+    this.magnetSystem = new MagnetSystem(this);
     this.hud = new GameHud(
       this,
       this.saveManager.getBestScore(),
@@ -163,6 +174,10 @@ export class GameScene extends Phaser.Scene {
       .setVisible(false);
 
     if (data?.useShield) this.shieldSystem.activate();
+    if (data?.useMagnet) {
+      this.magnetSystem.activate();
+      this.hud.showMagnetTimer(this.magnetSystem.timer);
+    }
 
     if (DEBUG_SHOW_UI_BOUNDS) this.drawDebugUiBounds();
 
@@ -180,9 +195,16 @@ export class GameScene extends Phaser.Scene {
     this.spawnSystem.updateVortexPositions(delta);
     this.directionWheel.update(delta);
 
-    // 2. 별 아이템 / 방어막 업데이트
+    // 2. 별 아이템 / 방어막 / 자석 업데이트
     this.starItemSystem.update(delta, scrollY);
     this.shieldSystem.update(delta, this.player.x, this.player.y);
+    const wasActive = this.magnetSystem.isActive;
+    this.magnetSystem.update(delta, this.player.x, this.player.y, this.clouds);
+    if (this.magnetSystem.isActive) {
+      this.hud.updateMagnetTimer(this.magnetSystem.timer);
+    } else if (wasActive) {
+      this.hud.hideMagnetTimer();
+    }
 
     // ── 로켓 모드 분기 ──────────────────────────────────────
     if (this.isRocketMode) {
@@ -193,7 +215,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // 3. 장애물 업데이트 (새떼 + 번개)
+    // 3. 장애물 업데이트 (새떼 + 번개) — 자석 당기기 중에도 계속 진행
     this.obstacleSystem.update(delta, this.time.now, scrollY);
     this.checkObstacleCollisions();
 
@@ -217,7 +239,10 @@ export class GameScene extends Phaser.Scene {
     this.updateSpawn();
 
     // 5. 플레이어 물리 / 위치 처리
-    if (this.player.isOnGround) {
+    if (this.isMagnetPulling) {
+      // 자석 당기기: 캐릭터만 따로 처리, 게임 세계는 위에서 이미 정상 진행됨
+      this.updateMagnetPull(dt);
+    } else if (this.player.isOnGround) {
       this.followCurrentCloud();
     } else {
       this.applyPhysics(dt);
@@ -636,17 +661,37 @@ export class GameScene extends Phaser.Scene {
 
     // physics fall 중에는 하강 중일 때만 착지 허용
     const requireFalling = this._physicsGravity;
-    const landed = this.collisionSystem.check(
-      this.player,
-      this.clouds,
-      this.jumpedFromId,
-      this.jumpTime,
-      this.time.now,
-      requireFalling,
-    );
-    if (landed !== null) {
-      this.handleLand(landed);
-      return;
+
+    if (this.magnetSystem.isActive) {
+      // 자석 활성: 확장된 범위에 닿으면 즉시 착지 대신 당기기 시작
+      const magnetTarget = this.collisionSystem.check(
+        this.player,
+        this.clouds,
+        this.jumpedFromId,
+        this.jumpTime,
+        this.time.now,
+        requireFalling,
+        this.magnetSystem.landToleranceY,
+        this.magnetSystem.landToleranceX,
+      );
+      if (magnetTarget !== null) {
+        this.startMagnetPull(magnetTarget);
+        return;
+      }
+    } else {
+      // 자석 비활성: 기존 즉시 착지
+      const landed = this.collisionSystem.check(
+        this.player,
+        this.clouds,
+        this.jumpedFromId,
+        this.jumpTime,
+        this.time.now,
+        requireFalling,
+      );
+      if (landed !== null) {
+        this.handleLand(landed);
+        return;
+      }
     }
 
     // 풍선 위험 판정: physics fall 중에는 스킵 (구름·풍선 통과)
@@ -964,6 +1009,83 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // ─── 자석 당기기 ───────────────────────────────────────
+
+  private startMagnetPull(cloud: CloudIsland): void {
+    this.isMagnetPulling = true;
+    this.magnetPullTarget = cloud;
+    this.magnetPullTimer = 1.0;
+    this._parabolicJump = false;
+    this._physicsGravity = false;
+    this.player.isOnGround = false;
+    this.player.isDead = false;
+    this.showDirectionArrow = false;
+
+    this.magnetSystem.startPull();
+
+    this.inputManager.disable();
+    const isDragPattern = this.jumpPattern === JumpPatternType.PATTERN_1 ||
+                          this.jumpPattern === JumpPatternType.PATTERN_2;
+    if (isDragPattern) this.directionWheel.disable();
+  }
+
+  private updateMagnetPull(dt: number): void {
+    const cloud = this.magnetPullTarget;
+    if (!cloud) {
+      this.isMagnetPulling = false;
+      return;
+    }
+
+    // 당기는 도중 구름이 낙하하기 시작하면 취소 → 중력 낙하로 전환
+    if (cloud.isFalling) {
+      this.magnetSystem.endPull();
+      this.isMagnetPulling = false;
+      this.magnetPullTarget = null;
+      this._physicsGravity = true;
+      this.jumpTime = this.time.now;
+      return;
+    }
+
+    this.magnetPullTimer -= dt;
+
+    // 타깃: 구름 중앙 위. 구름이 궤도를 계속 이동하므로 매 프레임 갱신
+    const targetX = cloud.x;
+    const targetY = cloud.topY - this.getPlayerHalfH();
+
+    // 진행률(0→1)에 따라 당기는 속도를 점점 빠르게 (ease-in)
+    const progress = 1 - Math.max(0, this.magnetPullTimer) / 1.0;
+    const lerpSpeed = 2.5 + progress * 14;
+    const lerpT = Math.min(1, dt * lerpSpeed);
+
+    this.player.x = Phaser.Math.Linear(this.player.x, targetX, lerpT);
+    this.player.y = Phaser.Math.Linear(this.player.y, targetY, lerpT);
+    this.player.vx = 0;
+    this.player.vy = 0;
+
+    // 당기기 이펙트 매 프레임 갱신
+    this.magnetSystem.updatePull(this.player.x, this.player.y, cloud.x, cloud.topY, progress);
+
+    if (this.magnetPullTimer <= 0) {
+      // 1초 완료 → 중앙에 스냅 후 착지 처리
+      this.player.x = cloud.x;
+      this.player.y = cloud.topY - this.getPlayerHalfH();
+      this.magnetSystem.endPull();
+      this.isMagnetPulling = false;
+      this.magnetPullTarget = null;
+
+      this.handleLand(cloud);
+
+      this.time.delayedCall(250, () => {
+        if (!this.isGameOver && !this.player.isDead) {
+          this.inputManager.enable();
+          const isDragPattern = this.jumpPattern === JumpPatternType.PATTERN_1 ||
+                                this.jumpPattern === JumpPatternType.PATTERN_2;
+          if (isDragPattern) this.directionWheel.enable();
+        }
+      });
+    }
+  }
+
   // ─── 로켓 모드 ─────────────────────────────────────────
 
   private startRocketMode(): void {
@@ -1173,6 +1295,7 @@ export class GameScene extends Phaser.Scene {
     this.obstacleSystem?.clearAll();
     this.starItemSystem?.clearAll();
     this.shieldSystem?.clearAll();
+    this.magnetSystem?.clearAll();
     this.clouds?.forEach((c) => c.destroy());
     this.clouds = [];
     this.player?.destroy();

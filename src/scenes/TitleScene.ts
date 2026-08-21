@@ -24,6 +24,8 @@ export class TitleScene extends Phaser.Scene {
   private patternLabel!: Phaser.GameObjects.Text;
   private useShield: boolean = true;
   private shieldCheckGraphics!: Phaser.GameObjects.Graphics;
+  private useMagnet: boolean = false;
+  private magnetCheckGraphics!: Phaser.GameObjects.Graphics;
   private loginContainer!: Phaser.GameObjects.Container;
   private authUnsub: (() => void) | null = null;
 
@@ -38,7 +40,7 @@ export class TitleScene extends Phaser.Scene {
     this.addLoginSection();
     this.addBestScore();
     this.addPatternSelector();
-    this.addShieldToggle();
+    this.addItemToggles();
     this.addStartButton();
     void this.initAuthState();
 
@@ -311,64 +313,81 @@ export class TitleScene extends Phaser.Scene {
     this.patternLabel.setText(PATTERN_NAMES[this.selectedPattern] ?? '');
   }
 
-  // ─── 방어막 토글 (테스트 전용) ───────────────────────────
+  // ─── 아이템 토글 (방어막 + 자석) ────────────────────────────
 
-  private addShieldToggle(): void {
+  private addItemToggles(): void {
     const cx = BASE_WIDTH / 2;
-    const cy = BASE_HEIGHT * 0.845;
+    const panelCY = BASE_HEIGHT * 0.855;
     const panelW = 860;
-    const panelH = 100;
+    const panelH = 196;
+    const row1CY = panelCY - 48;
+    const row2CY = panelCY + 48;
 
     // 패널 배경
     this.add
-      .rectangle(cx, cy, panelW, panelH, 0x001144, 0.50)
+      .rectangle(cx, panelCY, panelW, panelH, 0x001144, 0.50)
       .setOrigin(0.5).setDepth(DEPTH.HUD - 1)
       .setStrokeStyle(2, 0x4466cc, 0.5);
 
-    // 체크박스 그래픽
+    // ── 방어막 행 ──────────────────────────────────────────────
     this.shieldCheckGraphics = this.add.graphics().setDepth(DEPTH.HUD);
-    this.drawShieldCheckbox();
+    this.drawCheckbox(this.shieldCheckGraphics, cx - 340, row1CY, this.useShield, 0x66aaff, 0x88ddff);
 
-    // 체크박스 히트 영역
     const checkSize = 52;
-    const checkX = cx - 340;
     this.add
-      .rectangle(checkX, cy, checkSize, checkSize, 0xffffff, 0)
+      .rectangle(cx - 340, row1CY, checkSize, checkSize, 0xffffff, 0)
       .setOrigin(0.5).setDepth(DEPTH.HUD)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
         this.useShield = !this.useShield;
-        this.drawShieldCheckbox();
+        this.drawCheckbox(this.shieldCheckGraphics, cx - 340, row1CY, this.useShield, 0x66aaff, 0x88ddff);
       });
 
-    // 레이블
     this.add
-      .text(cx - 300, cy, '🫧  방어막 사용  (테스트)', {
+      .text(cx - 300, row1CY, '🫧  방어막 사용  (테스트)', {
         fontSize: '38px', color: '#aaccff',
+      })
+      .setOrigin(0, 0.5).setDepth(DEPTH.HUD);
+
+    // ── 자석 행 ───────────────────────────────────────────────
+    this.magnetCheckGraphics = this.add.graphics().setDepth(DEPTH.HUD);
+    this.drawCheckbox(this.magnetCheckGraphics, cx - 340, row2CY, this.useMagnet, 0x4488ff, 0x66ccff);
+
+    this.add
+      .rectangle(cx - 340, row2CY, checkSize, checkSize, 0xffffff, 0)
+      .setOrigin(0.5).setDepth(DEPTH.HUD)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => {
+        this.useMagnet = !this.useMagnet;
+        this.drawCheckbox(this.magnetCheckGraphics, cx - 340, row2CY, this.useMagnet, 0x4488ff, 0x66ccff);
+      });
+
+    this.add
+      .text(cx - 300, row2CY, '🧲  자석 사용  (테스트)', {
+        fontSize: '38px', color: '#88ccff',
       })
       .setOrigin(0, 0.5).setDepth(DEPTH.HUD);
   }
 
-  private drawShieldCheckbox(): void {
-    const cx = BASE_WIDTH / 2;
-    const cy = BASE_HEIGHT * 0.845;
-    const checkX = cx - 340;
+  private drawCheckbox(
+    g: Phaser.GameObjects.Graphics,
+    checkX: number,
+    cy: number,
+    checked: boolean,
+    borderColor: number,
+    checkColor: number,
+  ): void {
     const s = 44;
-
-    const g = this.shieldCheckGraphics;
     g.clear();
 
-    // 박스 배경
     g.fillStyle(0x002266, 0.8);
     g.fillRoundedRect(checkX - s / 2, cy - s / 2, s, s, 8);
 
-    // 테두리
-    g.lineStyle(2.5, this.useShield ? 0x66aaff : 0x445588, 0.9);
+    g.lineStyle(2.5, checked ? borderColor : 0x445588, 0.9);
     g.strokeRoundedRect(checkX - s / 2, cy - s / 2, s, s, 8);
 
-    // 체크 표시
-    if (this.useShield) {
-      g.lineStyle(4, 0x88ddff, 1);
+    if (checked) {
+      g.lineStyle(4, checkColor, 1);
       g.beginPath();
       g.moveTo(checkX - s * 0.28, cy + s * 0.02);
       g.lineTo(checkX - s * 0.06, cy + s * 0.26);
@@ -381,7 +400,7 @@ export class TitleScene extends Phaser.Scene {
 
   private addStartButton(): void {
     const cx = BASE_WIDTH / 2;
-    const cy = BASE_HEIGHT * 0.934;
+    const cy = BASE_HEIGHT * 0.950;
 
     const btn = this.add
       .text(cx, cy, '  게임 시작  ', {
@@ -398,6 +417,7 @@ export class TitleScene extends Phaser.Scene {
       this.scene.start(SCENE_KEYS.GAME, {
         pattern: this.selectedPattern,
         useShield: this.useShield,
+        useMagnet: this.useMagnet,
       }),
     );
 

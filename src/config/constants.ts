@@ -38,6 +38,10 @@ export const ITEM_CONFIG = {
   ROCKET_DURATION_SEC: 3,       // 로켓 모드 지속 시간 (초)
   ROCKET_SPEED: 1000,           // 로켓 상승 속도 (px/s)
   ROCKET_END_VY: -180,          // 로켓 종료 후 초기 상승 속도
+  // 자석 부스터
+  MAGNET_DURATION_SEC: 10,      // 자석 지속 시간 (초)
+  MAGNET_TOLERANCE_MULT: 3.5,   // LAND_TOLERANCE_Y 배율 (28 → 98px)
+  MAGNET_TOLERANCE_X: 60,       // 착지 X 허용 범위 확장 (구름 양쪽 끝 바깥 px)
 } as const;
 
 // 동적 구름 스폰 / 디스폰 설정
