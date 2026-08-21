@@ -42,6 +42,10 @@ export const ITEM_CONFIG = {
   MAGNET_DURATION_SEC: 10,      // 자석 지속 시간 (초)
   MAGNET_TOLERANCE_MULT: 3.5,   // LAND_TOLERANCE_Y 배율 (28 → 98px)
   MAGNET_TOLERANCE_X: 60,       // 착지 X 허용 범위 확장 (구름 양쪽 끝 바깥 px)
+  // 인게임 자석 아이템
+  MAGNET_ITEM_SPAWN_MIN: 3,     // 자석 아이템 최소 스폰 간격 (패턴1 구름 기준)
+  MAGNET_ITEM_SPAWN_MAX: 7,     // 자석 아이템 최대 스폰 간격
+  MAGNET_ITEM_HOVER_Y: 90,      // 구름 상단에서 아이템 띄우는 높이 (px)
 } as const;
 
 // 동적 구름 스폰 / 디스폰 설정

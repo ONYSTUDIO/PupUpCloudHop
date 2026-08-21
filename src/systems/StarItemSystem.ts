@@ -6,6 +6,8 @@ export class StarItemSystem {
   private scene: Phaser.Scene;
 
   private attachedCloud: CloudIsland | null = null;
+
+  get attachedCloudId(): string | null { return this.attachedCloud?.id ?? null; }
   private starGraphics: Phaser.GameObjects.Graphics | null = null;
   private starActive: boolean = false;
   private floatTime: number = 0;

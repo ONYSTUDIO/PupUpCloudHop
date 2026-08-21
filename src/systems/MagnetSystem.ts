@@ -45,7 +45,11 @@ export class MagnetSystem {
   }
 
   activate(): void {
-    if (this._isActive) return;
+    // 이미 활성 중이면 타이머만 리셋 (그래픽 재생성 없음)
+    if (this._isActive) {
+      this._timer = ITEM_CONFIG.MAGNET_DURATION_SEC;
+      return;
+    }
     this._isActive = true;
     this._timer = ITEM_CONFIG.MAGNET_DURATION_SEC;
     this.time = 0;
