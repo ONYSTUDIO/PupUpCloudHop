@@ -12,6 +12,8 @@ export default defineConfig({
       '@ui': path.resolve(__dirname, 'src/ui'),
       '@game-types': path.resolve(__dirname, 'src/types'),
       '@utils': path.resolve(__dirname, 'src/utils'),
+      '@services': path.resolve(__dirname, 'src/services'),
+      '@lib': path.resolve(__dirname, 'src/lib'),
     },
   },
   build: {

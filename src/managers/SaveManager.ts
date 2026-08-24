@@ -40,6 +40,8 @@ const DEFAULT_SAVE: SaveData = {
   equippedSkin: 'dog_default',
   lastRouletteDate: '',
   roulettePaidSpinsToday: 0,
+  shieldItems: 0,
+  magnetItems: 0,
 };
 
 export class SaveManager {
@@ -112,6 +114,13 @@ export class SaveManager {
     return this.data.roulettePaidSpinsToday;
   }
 
+  /** [테스트용] 룰렛 스핀 상태를 초기화. */
+  resetRouletteState(): void {
+    this.data.lastRouletteDate = '';
+    this.data.roulettePaidSpinsToday = 0;
+    this.persist();
+  }
+
   /**
    * 유료 스핀 비용을 지불하고 기록. 성공 시 true.
    * 비용: 1회째=2다이아, 2회째=3다이아, 3회째=5다이아
@@ -130,6 +139,23 @@ export class SaveManager {
   }
 
   // ─────────────────────────────────────────────────────────
+
+  // ─── 아이템 수량 ──────────────────────────────────────────────
+
+  getShieldItems(): number { return this.data.shieldItems ?? 0; }
+  getMagnetItems(): number { return this.data.magnetItems ?? 0; }
+
+  addShieldItem(count = 1): void {
+    this.data.shieldItems = (this.data.shieldItems ?? 0) + count;
+    this.persist();
+  }
+
+  addMagnetItem(count = 1): void {
+    this.data.magnetItems = (this.data.magnetItems ?? 0) + count;
+    this.persist();
+  }
+
+  // ─────────────────────────────────────────────────────────────
 
   /** 다이아몬드 1개 = 코인 150개, 단방향 교환 */
   exchangeDiamondsToCoins(diamondAmount: number): boolean {

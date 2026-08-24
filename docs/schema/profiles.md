@@ -17,6 +17,8 @@ Supabase Auth의 `auth.users`와 1:1 연결. 구글/애플/페이스북 OAuth �
 | `diamonds` | integer | 0 | 하드 커런시 (다이아몬드) |
 | `best_score` | integer | 0 | 역대 최고 점수 |
 | `total_play_count` | integer | 0 | 총 플레이 횟수 |
+| `last_roulette_date` | date | null | 마지막 스핀 날짜 (null = 미사용). 무료 스핀 여부 판별 |
+| `roulette_paid_spins_today` | smallint | 0 | 당일 유료 스핀 횟수 (0~3). 날짜 바뀌면 앱에서 리셋 |
 | `created_at` | timestamptz | now() | 계정 최초 생성 일시 |
 | `updated_at` | timestamptz | now() | 마지막 업데이트 일시 |
 
@@ -39,6 +41,8 @@ Supabase Auth의 `auth.users`와 1:1 연결. 구글/애플/페이스북 OAuth �
 |------|------|------|
 | `add_coins(amount int)` | integer | 코인 증감 (음수 가능, 동시성 안전) |
 | `add_diamonds(amount int)` | integer | 다이아몬드 증감 (음수 가능, 동시성 안전) |
+| `record_free_roulette()` | void | 무료 스핀 사용 기록 (날짜 갱신, 유료 횟수 리셋) |
+| `spend_paid_roulette()` | integer | 유료 스핀 다이아 차감. 잔액 부족·소진 시 에러 |
 
 > 직접 `UPDATE SET coins = coins + N` 대신 RPC를 사용해야 동시 요청 시 손실 없음.
 
@@ -165,5 +169,7 @@ $$;
 
 ## 관련 문서
 
+- [룰렛 상태 마이그레이션](./add_roulette_state.md)
+- [player_inventory 테이블](./player_inventory.md)
 - [재화 시스템 설계](../CURRENCY_DESIGN.md)
 - [기술 스택](../TECH_STACK.md)

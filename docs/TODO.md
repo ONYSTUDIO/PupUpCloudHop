@@ -170,7 +170,7 @@
 
 ---
 
-### 🎡 룰렛 (RouletteScene) — 미구현
+### 🎡 룰렛 (RouletteScene) — 구현 완료
 
 #### 밸런스 설계 메모
 > **다이아몬드 비용 및 추가 횟수 검토**
@@ -206,22 +206,33 @@
 - [x] `SaveManager`에 `lastRouletteDate: string` (YYYY-MM-DD) 필드 추가
 - [x] `SaveManager`에 `roulettePaidSpinsToday: number` 필드 추가 (날짜 바뀌면 리셋)
 - [x] `SaveManager`에 `canFreeRoulette()`, `recordFreeRoulette()`, `spendPaidRoulette()` 메서드 추가
-- [ ] `SaveManager`에 보상 지급 메서드 추가: `addShieldItem()`, `addMagnetItem()` (수량 관리)
+- [x] `SaveManager`에 보상 지급 메서드 추가: `addShieldItem()`, `addMagnetItem()` (수량 관리)
+- [x] `SaveManager`에 `resetRouletteState()` 추가 (테스트용 초기화)
 
 #### RouletteScene 구현
 - [x] `RouletteScene.ts` 생성 (플레이스홀더 — 배경, 휠 그래픽, 스핀 현황, 닫기 버튼)
-- [ ] 8칸 룰렛 휠 레이아웃 렌더링 (Phaser Graphics / Container)
-- [ ] 슬롯별 아이콘 + 보상 텍스트 표시 (코인/다이아/아이템 구분 색상)
-- [ ] 스핀 버튼 UI — 무료 가능 시 "무료 스핀!" / 소진 시 "💎 2" 표시 (점증 비용 반영)
-- [ ] 스핀 애니메이션: 가속 → 감속 → 당첨 슬롯 정렬 (Phaser Tweens)
-- [ ] 당첨 연출: 강조 이펙트 + 보상 팝업 (획득 내용 텍스트)
-- [ ] 추가 스핀 불가 시 안내 문구 ("오늘은 더 이상 스핀할 수 없어요. 내일 또 도전!")
-- [ ] 닫기 버튼 → GameScene resume
+- [x] 8칸 룰렛 휠 레이아웃 렌더링 (Phaser Graphics / Container)
+- [x] 슬롯별 아이콘 + 보상 텍스트 표시 (코인/다이아/아이템 구분 색상)
+- [x] 스핀 버튼 UI — 무료 가능 시 "무료 스핀!" / 소진 시 "💎 N" 표시 (점증 비용 반영)
+- [x] 스핀 애니메이션: 가속 → 감속 → 당첨 슬롯 정렬 (Phaser Tweens)
+- [x] 당첨 연출: 강조 이펙트 + 보상 팝업 (획득 내용 텍스트)
+- [x] 추가 스핀 불가 시 안내 문구 ("오늘은 더 이상 스핀할 수 없어요. 내일 다시 도전하세요!")
+- [x] 닫기 버튼 → GameScene resume
+- [x] [TEST] 무료 룰렛 초기화 버튼 (로컬 + DB 동시 초기화)
 
 #### 진입 연결
 - [x] `GameScene.setupUILayers()` 에서 룰렛 아이콘을 `rightMetaPanel.addIcon()` 으로 추가
 - [x] 아이콘 탭 시 GameScene pause + RouletteScene launch
 - [x] 무료 스핀 잔여 시 아이콘에 "FREE" 뱃지 표시
+
+#### DB 연동 (Supabase)
+- [x] `profiles` 테이블에 `last_roulette_date`, `roulette_paid_spins_today` 컬럼 추가
+- [x] `player_inventory` 테이블 신규 생성 (아이템 수량 관리, 확장 가능 구조)
+- [x] `record_free_roulette()`, `spend_paid_roulette()`, `add_item()` RPC 구현
+- [x] `database.types.ts` 신규 테이블·컬럼·RPC 타입 반영
+- [x] `InventoryService` 신규 생성 (`add_item` RPC 래핑, 인벤토리 조회)
+- [x] `ProfileService`에 룰렛 RPC 메서드 추가
+- [x] `RouletteScene`에 Supabase 백그라운드 동기화 연결 (로컬 우선, 실패 시 무중단)
 
 ---
 

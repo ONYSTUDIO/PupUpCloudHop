@@ -27,7 +27,9 @@
       "@managers/*": ["src/managers/*"],
       "@ui/*": ["src/ui/*"],
       "@game-types/*": ["src/types/*"],
-      "@utils/*": ["src/utils/*"]
+      "@utils/*": ["src/utils/*"],
+      "@services/*": ["src/services/*"],
+      "@lib/*": ["src/lib/*"]
     }
   },
   "include": ["src", "capacitor.config.ts"]

@@ -50,6 +50,8 @@ export interface SaveData {
   equippedSkin: string;
   lastRouletteDate: string;       // 'YYYY-MM-DD' — 마지막 무료 스핀 날짜
   roulettePaidSpinsToday: number; // 오늘 유료 스핀 횟수 (날짜 바뀌면 0 리셋)
+  shieldItems: number;            // 룰렛 등으로 획득한 방어막 아이템 수량
+  magnetItems: number;            // 룰렛 등으로 획득한 자석 아이템 수량
 }
 
 export type SceneKey = 'BootScene' | 'PreloadScene' | 'TitleScene' | 'GameScene' | 'ResultScene' | 'ShopScene' | 'RouletteScene';
