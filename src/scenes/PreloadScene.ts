@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { SCENE_KEYS } from '@config/constants';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
+import { authService } from '../services/AuthService';
 
 export class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -13,8 +14,13 @@ export class PreloadScene extends Phaser.Scene {
     this.showLoadingBar();
   }
 
-  create(): void {
-    this.scene.start(SCENE_KEYS.TITLE);
+  async create(): Promise<void> {
+    const user = await authService.getUser();
+    if (user) {
+      this.scene.start(SCENE_KEYS.MAIN);
+    } else {
+      this.scene.start(SCENE_KEYS.TITLE);
+    }
   }
 
   private showLoadingBar(): void {

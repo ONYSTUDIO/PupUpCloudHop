@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { BootScene } from '@scenes/BootScene';
 import { PreloadScene } from '@scenes/PreloadScene';
 import { TitleScene } from '@scenes/TitleScene';
+import { MainScene } from '@scenes/MainScene';
 import { GameScene } from '@scenes/GameScene';
 import { ResultScene } from '@scenes/ResultScene';
 import { ShopScene } from '@scenes/ShopScene';
@@ -22,7 +23,7 @@ export const phaserConfig: Phaser.Types.Core.GameConfig = {
     height: BASE_HEIGHT,
   },
   // 수동 물리 사용 — Arcade Physics 비활성화
-  scene: [BootScene, PreloadScene, TitleScene, GameScene, ResultScene, ShopScene, RouletteScene],
+  scene: [BootScene, PreloadScene, TitleScene, MainScene, GameScene, ResultScene, ShopScene, RouletteScene],
   input: {
     activePointers: 2,
   },

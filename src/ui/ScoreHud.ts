@@ -1,52 +1,34 @@
 import Phaser from 'phaser';
 import type { ScoreData } from '@game-types/game';
-import { BASE_WIDTH } from '@config/gameConfig';
+import { BASE_WIDTH } from '@config/baseDimensions';
 import { EVENTS, DEPTH } from '@config/constants';
 import { UI_LAYOUT } from '@config/uiLayout';
 
-const TOP  = UI_LAYOUT.hud.top;   // 40
-const SIDE = UI_LAYOUT.hud.side;  // 24
+const TOP = UI_LAYOUT.hud.top;
 
-// ─── Row 1 ──────────────────────────────────────────────────
-// [프로필]  [🪙 코인][💎 다이아]  [⏸]
+// Row 1 중심Y (TopHud 참고)
 const ROW1_CY = TOP + 52;
 
-// 프로필 (좌)
-const AVATAR_R  = 38;
-const AVATAR_CX = SIDE + AVATAR_R + 8;   // 70
-const NAME_X    = AVATAR_CX + AVATAR_R + 14;
-
-// 재화 (중앙)
-const CX = BASE_WIDTH / 2;               // 540
-const COIN_X    = CX - 80;              // 460 — 코인 우측 정렬 기준
-const DIAMOND_X = CX + 80;              // 620 — 다이아 좌측 정렬 기준
-const CURRENCY_FS = '44px';
-
-// 일시정지 (우)
-const PAUSE_X = BASE_WIDTH - SIDE - 8;  // 1048
-
-// ─── Row 2 ──────────────────────────────────────────────────
-// [점수]
+// Row 2: 점수
 const SCORE_Y = ROW1_CY + 74;
 const BEST_Y  = SCORE_Y + 112;
 
-// ─── 로켓 타이머 (점수 아래) ────────────────────────────────
-const ROCKET_TEXT_Y  = BEST_Y + 60;
-const ROCKET_BAR_Y   = ROCKET_TEXT_Y + 62;
+// 로켓 타이머 (점수 아래)
+const ROCKET_TEXT_Y = BEST_Y + 60;
+const ROCKET_BAR_Y  = ROCKET_TEXT_Y + 62;
 
-// ─── 자석 타이머 (로켓 타이머 아래) ─────────────────────────
-const MAGNET_TEXT_Y  = ROCKET_BAR_Y + 52;
-const MAGNET_BAR_Y   = MAGNET_TEXT_Y + 54;
+// 자석 타이머 (로켓 타이머 아래)
+const MAGNET_TEXT_Y = ROCKET_BAR_Y + 52;
+const MAGNET_BAR_Y  = MAGNET_TEXT_Y + 54;
 
-export class GameHud {
+const CX = BASE_WIDTH / 2; // 540
+
+export class ScoreHud {
   private scene: Phaser.Scene;
 
   // 점수 (Row 2)
   private scoreText: Phaser.GameObjects.Text;
   private bestText: Phaser.GameObjects.Text;
-
-  // 일시정지 (Row 1 우)
-  private pauseBtn: Phaser.GameObjects.Text;
 
   // 로켓 타이머
   private rocketTimerBg: Phaser.GameObjects.Graphics | null = null;
@@ -56,65 +38,8 @@ export class GameHud {
   private magnetTimerBg: Phaser.GameObjects.Graphics | null = null;
   private magnetTimerText: Phaser.GameObjects.Text | null = null;
 
-  // 프로필 (Row 1 좌)
-  private avatarBg: Phaser.GameObjects.Graphics;
-  private avatarInitial: Phaser.GameObjects.Text;
-  private nameText: Phaser.GameObjects.Text;
-
-  // 재화 (Row 1 중앙)
-  private coinText: Phaser.GameObjects.Text;
-  private diamondText: Phaser.GameObjects.Text;
-
-  constructor(
-    scene: Phaser.Scene,
-    bestScore: number,
-    onTogglePause: () => void,
-    initialCoins: number,
-    initialDiamonds: number,
-  ) {
+  constructor(scene: Phaser.Scene, bestScore: number) {
     this.scene = scene;
-
-    // ─── Row 1 좌: 프로필 ────────────────────────────────────
-    this.avatarBg = scene.add.graphics()
-      .setScrollFactor(0).setDepth(DEPTH.HUD);
-    this.drawAvatarCircle(0x445588);
-
-    this.avatarInitial = scene.add
-      .text(AVATAR_CX, ROW1_CY, '?', {
-        fontSize: '42px', fontStyle: 'bold', color: '#ffffff',
-      })
-      .setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.HUD);
-
-    this.nameText = scene.add
-      .text(NAME_X, ROW1_CY, '...', {
-        fontSize: '36px', color: '#ddeeff',
-        stroke: '#001133', strokeThickness: 4,
-      })
-      .setOrigin(0, 0.5).setScrollFactor(0).setDepth(DEPTH.HUD);
-
-    // ─── Row 1 중앙: 재화 ────────────────────────────────────
-    this.coinText = scene.add
-      .text(COIN_X, ROW1_CY, `🪙 ${initialCoins}`, {
-        fontSize: CURRENCY_FS, fontStyle: 'bold',
-        color: '#ffcc00', stroke: '#442200', strokeThickness: 4,
-      })
-      .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.HUD);
-
-    this.diamondText = scene.add
-      .text(DIAMOND_X, ROW1_CY, `💎 ${initialDiamonds}`, {
-        fontSize: CURRENCY_FS, fontStyle: 'bold',
-        color: '#66ddff', stroke: '#003344', strokeThickness: 4,
-      })
-      .setOrigin(0, 0.5).setScrollFactor(0).setDepth(DEPTH.HUD);
-
-    // ─── Row 1 우: 일시정지 ──────────────────────────────────
-    this.pauseBtn = scene.add
-      .text(PAUSE_X, ROW1_CY, '⏸', { fontSize: '56px', color: '#ffffff' })
-      .setAlpha(0.7).setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.HUD)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', onTogglePause)
-      .on('pointerover', () => this.pauseBtn.setAlpha(1))
-      .on('pointerout',  () => this.pauseBtn.setAlpha(0.7));
 
     // ─── Row 2 중앙: 점수 ────────────────────────────────────
     this.scoreText = scene.add
@@ -132,23 +57,6 @@ export class GameHud {
       .setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.HUD);
 
     this.scene.events.on(EVENTS.SCORE_UPDATE, this.onScoreUpdate, this);
-  }
-
-  // ─── 외부 업데이트 API ──────────────────────────────────────
-
-  updateProfile(displayName: string, isGuest: boolean): void {
-    this.drawAvatarCircle(isGuest ? 0x556677 : 0x2266cc);
-    this.avatarInitial.setText(displayName.charAt(0).toUpperCase());
-    this.nameText.setText(displayName);
-  }
-
-  updateCurrency(coins: number, diamonds: number): void {
-    this.coinText.setText(`🪙 ${coins}`);
-    this.diamondText.setText(`💎 ${diamonds}`);
-  }
-
-  setPaused(paused: boolean): void {
-    this.pauseBtn.setText(paused ? '▶' : '⏸');
   }
 
   // ─── 로켓 타이머 ────────────────────────────────────────────
@@ -237,16 +145,12 @@ export class GameHud {
     this.magnetTimerText?.setVisible(false);
   }
 
+  // ─── destroy ────────────────────────────────────────────────
+
   destroy(): void {
     this.scene.events.off(EVENTS.SCORE_UPDATE, this.onScoreUpdate, this);
     this.scoreText.destroy();
     this.bestText.destroy();
-    this.pauseBtn.destroy();
-    this.avatarBg.destroy();
-    this.avatarInitial.destroy();
-    this.nameText.destroy();
-    this.coinText.destroy();
-    this.diamondText.destroy();
     this.rocketTimerBg?.destroy();
     this.rocketTimerText?.destroy();
     this.magnetTimerBg?.destroy();
@@ -258,13 +162,5 @@ export class GameHud {
   private onScoreUpdate(data: ScoreData): void {
     this.scoreText.setText(String(data.current));
     this.bestText.setText(`BEST  ${data.best}`);
-  }
-
-  private drawAvatarCircle(color: number): void {
-    this.avatarBg.clear();
-    this.avatarBg.fillStyle(0x000033, 0.45);
-    this.avatarBg.fillCircle(AVATAR_CX, ROW1_CY, AVATAR_R + 3);
-    this.avatarBg.fillStyle(color, 1);
-    this.avatarBg.fillCircle(AVATAR_CX, ROW1_CY, AVATAR_R);
   }
 }

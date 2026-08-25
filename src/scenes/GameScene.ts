@@ -15,7 +15,9 @@ import { AudioManager } from '@managers/AudioManager';
 import { InputManager } from '@managers/InputManager';
 import { SaveManager } from '@managers/SaveManager';
 import { authService } from '../services/AuthService';
-import { GameHud } from '@ui/GameHud';
+import { TopHud } from '@ui/TopHud';
+import { ScoreHud } from '@ui/ScoreHud';
+import { PausePopup } from '@ui/PausePopup';
 import { DirectionWheel } from '@ui/DirectionWheel';
 import { ActionPanel } from '@ui/ActionPanel';
 import { MetaIconPanel } from '@ui/MetaIconPanel';
@@ -53,7 +55,9 @@ export class GameScene extends Phaser.Scene {
   private audioManager!: AudioManager;
   private inputManager!: InputManager;
   private saveManager!: SaveManager;
-  private hud!: GameHud;
+  private topHud!: TopHud;
+  private scoreHud!: ScoreHud;
+  private pausePopup: PausePopup | null = null;
   private directionWheel!: DirectionWheel;
   private actionPanel!: ActionPanel;
   private leftMetaPanel!: MetaIconPanel;
@@ -64,8 +68,6 @@ export class GameScene extends Phaser.Scene {
   private jumpButtonGraphics!: Phaser.GameObjects.Graphics;
   private directionArrow!: Phaser.GameObjects.Graphics;
   private rocketTrailGraphics!: Phaser.GameObjects.Graphics;
-  private pauseOverlayBg!: Phaser.GameObjects.Rectangle;
-  private pauseOverlayText!: Phaser.GameObjects.Text;
 
   // 패턴별 버튼 위치 (setupBottomControls에서 결정)
   private jumpBtnCX: number = 0;
@@ -104,7 +106,7 @@ export class GameScene extends Phaser.Scene {
     super({ key: SCENE_KEYS.GAME });
   }
 
-  create(data?: { pattern?: JumpPatternType; useShield?: boolean; useMagnet?: boolean }): void {
+  create(data?: { pattern?: JumpPatternType }): void {
     this.jumpPattern = data?.pattern ?? JumpPatternType.PATTERN_3;
     this.isGameOver = false;
     this.isPaused = false;
@@ -138,13 +140,14 @@ export class GameScene extends Phaser.Scene {
     this.magnetItemSystem = new MagnetItemSystem(this);
     this.shieldSystem = new ShieldSystem(this);
     this.magnetSystem = new MagnetSystem(this);
-    this.hud = new GameHud(
+    this.topHud = new TopHud(
       this,
-      this.saveManager.getBestScore(),
-      () => this.togglePause(),
       this.saveManager.getCoins(),
       this.saveManager.getDiamonds(),
+      () => this.togglePause(),
     );
+    this.scoreHud = new ScoreHud(this, this.saveManager.getBestScore());
+    this.pausePopup = null;
     void this.initHudProfile();
 
     this.setupBackground();
@@ -159,28 +162,6 @@ export class GameScene extends Phaser.Scene {
     this.chargeIndicator = this.add.graphics().setDepth(DEPTH.PLAYER + 1);
     this.directionArrow = this.add.graphics().setDepth(DEPTH.PLAYER + 1);
     this.rocketTrailGraphics = this.add.graphics().setDepth(DEPTH.PLAYER - 1);
-
-    this.pauseOverlayBg = this.add
-      .rectangle(BASE_WIDTH / 2, BASE_HEIGHT / 2, BASE_WIDTH, BASE_HEIGHT, 0x000000, 0.5)
-      .setScrollFactor(0)
-      .setDepth(DEPTH.HUD + 10)
-      .setVisible(false);
-
-    this.pauseOverlayText = this.add
-      .text(BASE_WIDTH / 2, BASE_HEIGHT / 2, '일시정지', {
-        fontSize: '100px', fontStyle: 'bold',
-        color: '#ffffff', stroke: '#003399', strokeThickness: 10,
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(DEPTH.HUD + 11)
-      .setVisible(false);
-
-    if (data?.useShield) this.shieldSystem.activate();
-    if (data?.useMagnet) {
-      this.magnetSystem.activate();
-      this.hud.showMagnetTimer(this.magnetSystem.timer);
-    }
 
     if (DEBUG_SHOW_UI_BOUNDS) this.drawDebugUiBounds();
 
@@ -205,9 +186,9 @@ export class GameScene extends Phaser.Scene {
     const wasActive = this.magnetSystem.isActive;
     this.magnetSystem.update(delta, this.player.x, this.player.y, this.clouds);
     if (this.magnetSystem.isActive) {
-      this.hud.updateMagnetTimer(this.magnetSystem.timer);
+      this.scoreHud.updateMagnetTimer(this.magnetSystem.timer);
     } else if (wasActive) {
-      this.hud.hideMagnetTimer();
+      this.scoreHud.hideMagnetTimer();
     }
 
     // ── 로켓 모드 분기 ──────────────────────────────────────
@@ -979,7 +960,7 @@ export class GameScene extends Phaser.Scene {
     // 자석 아이템 수집 — 자석 효과 활성화
     if (this.magnetItemSystem.checkLanding(cloud)) {
       this.magnetSystem.activate();
-      this.hud.showMagnetTimer(this.magnetSystem.timer);
+      this.scoreHud.showMagnetTimer(this.magnetSystem.timer);
     }
 
     // 풍선 충돌 낙하 중 착지 → 게임 계속
@@ -1049,18 +1030,36 @@ export class GameScene extends Phaser.Scene {
     if (this.isPaused) {
       this.inputManager.disable();
       if (isDragPattern) this.directionWheel.disable();
-      this.pauseOverlayBg.setVisible(true);
-      this.pauseOverlayText.setVisible(true);
+
+      this.pausePopup = new PausePopup(
+        this,
+        () => {
+          // 다시하기
+          this.scene.start(SCENE_KEYS.GAME, { pattern: this.jumpPattern });
+        },
+        () => {
+          // 메인으로
+          this.scene.start(SCENE_KEYS.MAIN);
+        },
+        () => {
+          // 계속하기
+          this.isPaused = false;
+          this.pausePopup?.destroy();
+          this.pausePopup = null;
+          if (!this.player.isDead) {
+            this.inputManager.enable();
+            if (isDragPattern) this.directionWheel.enable();
+          }
+        },
+      );
     } else {
       if (!this.player.isDead) {
         this.inputManager.enable();
         if (isDragPattern) this.directionWheel.enable();
       }
-      this.pauseOverlayBg.setVisible(false);
-      this.pauseOverlayText.setVisible(false);
+      this.pausePopup?.destroy();
+      this.pausePopup = null;
     }
-
-    this.hud.setPaused(this.isPaused);
   }
 
   private async initHudProfile(): Promise<void> {
@@ -1072,7 +1071,7 @@ export class GameScene extends Phaser.Scene {
       : ((user.user_metadata?.['full_name'] as string | undefined)
           ?? user.email
           ?? '플레이어');
-    this.hud.updateProfile(name, isGuest);
+    this.topHud.updateProfile(name, isGuest);
   }
 
   private triggerGameOver(delay: number = 1000): void {
@@ -1201,7 +1200,7 @@ export class GameScene extends Phaser.Scene {
                           this.jumpPattern === JumpPatternType.PATTERN_2;
     if (isDragPattern) this.directionWheel.disable();
 
-    this.hud.showRocketTimer(this.rocketTimer);
+    this.scoreHud.showRocketTimer(this.rocketTimer);
   }
 
   private updateRocketMode(dt: number): void {
@@ -1243,7 +1242,7 @@ export class GameScene extends Phaser.Scene {
         this.rocketLanding = true;
         this.rocketLandTarget = target;
         this.rocketLandTimeout = 2; // 최대 2초 추가 비행
-        this.hud.hideRocketTimer();
+        this.scoreHud.hideRocketTimer();
       } else {
         this.endRocketMode();
       }
@@ -1256,7 +1255,7 @@ export class GameScene extends Phaser.Scene {
     this.player.vy = -ITEM_CONFIG.ROCKET_SPEED;
     this.drawRocketTrail();
     this.checkRocketCloudPass();
-    this.hud.updateRocketTimer(this.rocketTimer);
+    this.scoreHud.updateRocketTimer(this.rocketTimer);
   }
 
   private endRocketMode(): void {
@@ -1266,7 +1265,7 @@ export class GameScene extends Phaser.Scene {
     this.rocketLandTarget = null;
     this.rocketLandTimeout = 0;
     this.rocketTrailGraphics.clear();
-    this.hud.hideRocketTimer();
+    this.scoreHud.hideRocketTimer();
 
     // 로켓 종료 후 약한 상승→중력 낙하로 자연스럽게 전환
     this.player.vy = ITEM_CONFIG.ROCKET_END_VY;
@@ -1352,7 +1351,7 @@ export class GameScene extends Phaser.Scene {
     this.rocketLandTarget = null;
     this.rocketLandTimeout = 0;
     this.rocketTrailGraphics.clear();
-    this.hud.hideRocketTimer();
+    this.scoreHud.hideRocketTimer();
 
     // 구름 상단에 스냅
     this.player.y = cloud.topY - this.player.HALF_H;
@@ -1377,7 +1376,10 @@ export class GameScene extends Phaser.Scene {
       document.removeEventListener('visibilitychange', this._onVisibilityChange);
       this._onVisibilityChange = null;
     }
-    this.hud?.destroy();
+    this.topHud?.destroy();
+    this.scoreHud?.destroy();
+    this.pausePopup?.destroy();
+    this.pausePopup = null;
     this.actionPanel?.destroy();
     this.leftMetaPanel?.destroy();
     this.rightMetaPanel?.destroy();
@@ -1397,7 +1399,5 @@ export class GameScene extends Phaser.Scene {
     this.directionArrow?.destroy();
     this.rocketTrailGraphics?.destroy();
     this.jumpButtonGraphics?.destroy();
-    this.pauseOverlayBg?.destroy();
-    this.pauseOverlayText?.destroy();
   }
 }

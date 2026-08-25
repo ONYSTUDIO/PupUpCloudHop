@@ -80,8 +80,8 @@ export class ResultPanel {
       scene.scene.start(SCENE_KEYS.GAME, { pattern });
     });
 
-    const titleBtn = this.makeButton(scene, cx, cy + 450, '타이틀로', 0x448866, () => {
-      scene.scene.start(SCENE_KEYS.TITLE);
+    const titleBtn = this.makeButton(scene, cx, cy + 450, '홈으로', 0x448866, () => {
+      scene.scene.start(SCENE_KEYS.MAIN);
     });
 
     this.container = scene.add
