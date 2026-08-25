@@ -155,6 +155,53 @@
 #### 기타
 - [ ] **콤보 보너스**: 연속 착지 시 점수 배율 증가
 
+---
+
+### 🏆 성취감 시스템 (PROGRESSION_DESIGN.md 참고)
+
+> 세 가지 방향성 전체 설계: [`PROGRESSION_DESIGN.md`](./PROGRESSION_DESIGN.md)
+
+#### 3안: 콤보 시스템 + 코인 배율 (P1 — 구현 우선)
+
+- [ ] `ScoreSystem`에 `comboCount`, `maxCombo` 필드 추가
+- [ ] 착지 성공(`onLand`) 시 콤보 증가, 낙사(`triggerGameOver`) 시 리셋
+- [ ] 콤보 단계별 코인 배율 적용 (3콤보 ×2, 5콤보 ×3, 10콤보 ×5, 20콤보 ×8)
+- [ ] `GameHud`에 콤보 카운터 UI 추가 (콤보 숫자 + 단계별 글로우 이펙트)
+- [ ] 고콤보 구간 화면 연출 (배경 색상 변화 또는 파티클)
+- [ ] `ResultPanel`에 "최고 콤보: N" 표시 추가
+
+#### 2안: 마일스톤 해금 시스템 (P1 — 데이터 수집부터)
+
+- [ ] `SaveManager`에 누적 통계 필드 추가
+  - `totalJumpsAllTime`: 전체 누적 점프 수 (현재 `totalJumps` 활용 가능)
+  - `lifetimeCoins`: 전체 누적 코인 획득량
+  - `unlockedMilestones: string[]`: 달성한 마일스톤 ID 목록
+- [ ] `MilestoneManager` 신규 생성
+  - 마일스톤 정의 목록 (조건 + 해금 내용)
+  - 게임 종료 시 조건 체크 + 신규 달성 마일스톤 처리
+  - 해금 내용 적용 (스킨 추가, 업그레이드 슬롯 해금 등)
+- [ ] 마일스톤 달성 연출 UI (결과 화면 또는 별도 오버레이)
+  - 팡파레 이펙트 + 해금 내용 표시 팝업
+- [ ] 타이틀 또는 결과 화면에 "다음 목표" 표시 컴포넌트 추가
+
+#### 1안: 영구 패시브 업그레이드 (P2 — 상점 연동)
+
+- [ ] `SaveManager`에 업그레이드 단계 저장 필드 추가
+  - `upgradeMagnetDuration`: 0~3 (단계)
+  - `upgradeRocketDuration`: 0~2
+  - `upgradeCoinMultiplier`: 0~3
+  - `upgradeShieldDurability`: 0~2
+  - `upgradeLandingRange`: 0~2
+- [ ] 각 시스템에 업그레이드 단계 반영
+  - `MagnetSystem`: 지속시간을 단계별 값으로 참조
+  - `ShieldSystem`: 내구도를 단계별 값으로 참조
+  - `ScoreSystem`: 코인 배율에 업그레이드 배율 적용
+  - `CollisionSystem`: 착지 판정 범위에 업그레이드 보정 적용
+- [ ] 상점 "업그레이드" 탭 UI 구현
+  - 현재 단계 표시 + 다음 단계 비용 + 구매 버튼
+  - 마일스톤 미달성 시 잠금 표시
+- [ ] 마일스톤 해금과 연동: 슬롯 해금 여부에 따라 구매 가능 여부 분기
+
 ### 기타 확장
 - [ ] **구름섬 패턴 다양화**: 손으로 제작한 패턴 세트 도입
 - [ ] **캐릭터 스킨**: 다른 종류의 강아지, 고양이 등

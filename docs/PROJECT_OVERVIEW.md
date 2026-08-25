@@ -256,12 +256,14 @@ UI 영역 때문에 게임 플레이 화면이 잘리지 않으며,
 
 # HUD
 
-상단 고정 (Overlay)
+상단 고정 (Overlay). 2단으로 구성하며 HUD 1은 씬 공통으로 사용.
 
-- 현재 점수
-- 최고 점수 (BEST)
-- 재화 (향후 추가)
-- 일시정지 버튼
+```
+[HUD 1 — TopHud]   프로필  🪙 코인  💎 다이아  ⏸ (인게임에서만)
+[HUD 2 — ScoreHud] 점수 / BEST / 로켓·자석 타이머  (인게임 전용)
+```
+
+→ 상세 구조: `docs/UI_ARCHITECTURE.md` 참고
 
 ---
 
@@ -275,7 +277,7 @@ UI 영역 때문에 게임 플레이 화면이 잘리지 않으며,
 
 다시 하기
 
-타이틀
+홈으로 (MainScene 이동)
 
 ---
 
@@ -307,9 +309,12 @@ Scene 기반
 
 - Boot
 - Preload
-- Title
+- Title (로그인 전용)
+- Main (홈 화면 — 패턴 선택, 게임 시작)
 - Game
 - Result
+- Shop (overlay)
+- Roulette (overlay)
 
 Player
 
