@@ -34,8 +34,10 @@ export const GAMEPLAY = {
   JUMP_STRAIGHT_MAX_SPEED: 2600,
   JUMP_STRAIGHT_TIMEOUT_MS: 3500, // 이 시간 내 미착지 시 게임오버
 
-  // 점수
-  SCORE_PER_JUMP: 1,
+  // 점수 (높이 비례 시스템)
+  MIN_SCORE_PER_LAND: 1,    // 어떤 착지든 보장되는 최솟값 (기존 착지 수 수준 유지)
+  SCORE_PER_LAYER:    1,    // 1층(HEIGHT_UNIT) 완벽 점프 시 높이 보너스
+  HEIGHT_UNIT:       310,   // 층간 평균 거리(px)
 
   // 코인 리워드 (점수 × 배율)
   COIN_PER_SCORE: 1,

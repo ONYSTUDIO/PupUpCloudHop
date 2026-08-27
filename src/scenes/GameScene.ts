@@ -956,8 +956,7 @@ export class GameScene extends Phaser.Scene {
     this.resetWheelOnLand();
 
     if (cloud.id !== prevId) {
-      this.scoreSystem.onLand();
-      this.events.emit(EVENTS.SCORE_UPDATE, this.scoreSystem.getScore());
+      this.scoreSystem.onLand(cloud.topY);
     }
 
     // 별 착지 수집 — 해당 구름에 별이 있으면 로켓 모드 발동
@@ -1323,7 +1322,7 @@ export class GameScene extends Phaser.Scene {
 
       if (horzOverlap && vertPassed) {
         this.rocketPassedCloudIds.add(cloud.id);
-        this.scoreSystem.onLand(); // onLand()가 내부에서 SCORE_UPDATE 이벤트 발행
+        this.scoreSystem.onLand(cloud.topY);
       }
     }
   }
