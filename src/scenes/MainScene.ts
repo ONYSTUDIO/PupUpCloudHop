@@ -6,6 +6,7 @@ import { authService } from '../services/AuthService';
 import { TopHud } from '@ui/TopHud';
 import { MetaIconPanel } from '@ui/MetaIconPanel';
 import { CheatPopup, CheatSettings } from '@ui/CheatPopup';
+import { MissionPopup } from '@ui/MissionPopup';
 import { JumpPatternType } from '@game-types/game';
 import { UI_LAYOUT } from '@config/uiLayout';
 
@@ -19,6 +20,8 @@ export class MainScene extends Phaser.Scene {
     startWithMagnet: false,
   };
   private cheatPopup: CheatPopup | null = null;
+  private missionPopup: MissionPopup | null = null;
+  private missionBadge!: Phaser.GameObjects.Graphics;
   private authUnsub: (() => void) | null = null;
 
   constructor() {
@@ -100,6 +103,7 @@ export class MainScene extends Phaser.Scene {
     this.rightMetaPanel = new MetaIconPanel(this, 'right');
     this.rightMetaPanel.addIcon(this.createShopIcon());
     this.rightMetaPanel.addIcon(this.createRouletteIcon());
+    this.rightMetaPanel.addIcon(this.createMissionIcon());
   }
 
   private createShopIcon(): Phaser.GameObjects.Container {
@@ -196,6 +200,97 @@ export class MainScene extends Phaser.Scene {
     });
 
     return container;
+  }
+
+  private createMissionIcon(): Phaser.GameObjects.Container {
+    const size = UI_LAYOUT.meta.iconSize;
+    const half = size / 2;
+    const container = this.add.container(0, 0);
+    container.setSize(size, size).setInteractive({ useHandCursor: true });
+
+    // 배경
+    const bg = this.add.graphics();
+    bg.fillStyle(0xffffff, 0.88);
+    bg.fillRoundedRect(-half, -half, size, size, 20);
+    bg.lineStyle(3, 0x44bb66, 1);
+    bg.strokeRoundedRect(-half, -half, size, size, 20);
+
+    // 체크리스트 아이콘 (3행)
+    const icon = this.add.graphics();
+    const rows = [
+      { y: -24, checked: true },
+      { y:  -4, checked: true },
+      { y:  16, checked: false },
+    ];
+    const boxX = -26;
+    const boxSize = 14;
+    const lineEndX = 24;
+
+    rows.forEach(({ y, checked }) => {
+      // 체크박스 테두리
+      icon.lineStyle(3, checked ? 0x44bb66 : 0xaaaaaa, 1);
+      icon.strokeRect(boxX, y - boxSize / 2, boxSize, boxSize);
+
+      // 체크 표시 (완료 항목)
+      if (checked) {
+        icon.fillStyle(0x44bb66, 1);
+        icon.fillRect(boxX, y - boxSize / 2, boxSize, boxSize);
+        icon.lineStyle(2.5, 0xffffff, 1);
+        icon.beginPath();
+        icon.moveTo(boxX + 2,         y + 1);
+        icon.lineTo(boxX + 6,         y + boxSize / 2 - 1);
+        icon.lineTo(boxX + boxSize - 1, y - boxSize / 2 + 3);
+        icon.strokePath();
+      }
+
+      // 항목 텍스트 라인
+      icon.lineStyle(2.5, checked ? 0x888888 : 0xbbbbbb, checked ? 0.5 : 0.8);
+      icon.beginPath();
+      icon.moveTo(boxX + boxSize + 6, y);
+      icon.lineTo(lineEndX,           y);
+      icon.strokePath();
+    });
+
+    const label = this.add.text(0, half - 24, '미션', {
+      fontSize: '26px', color: '#44bb66', fontStyle: 'bold',
+    }).setOrigin(0.5, 0.5);
+
+    // 수령 대기 배지 (빨간 점)
+    this.missionBadge = this.add.graphics();
+    this.refreshMissionBadge();
+
+    container.add([bg, icon, label, this.missionBadge]);
+
+    container.on('pointerdown', () => this.openMissionPopup());
+
+    return container;
+  }
+
+  private refreshMissionBadge(): void {
+    this.missionBadge.clear();
+    if (!this.saveManager.hasPendingMissions()) return;
+    const half = UI_LAYOUT.meta.iconSize / 2;
+    this.missionBadge.fillStyle(0xee2222, 1);
+    this.missionBadge.fillCircle(half - 10, -half + 10, 14);
+  }
+
+  private openMissionPopup(): void {
+    if (this.missionPopup) return;
+    this.missionPopup = new MissionPopup(
+      this,
+      this.saveManager,
+      () => {
+        this.topHud.updateCurrency(
+          this.saveManager.getCoins(),
+          this.saveManager.getDiamonds(),
+        );
+        this.refreshMissionBadge();
+      },
+      () => {
+        this.missionPopup = null;
+        this.refreshMissionBadge();
+      },
+    );
   }
 
   // ─── 최고기록 ──────────────────────────────────────────────
@@ -361,5 +456,7 @@ export class MainScene extends Phaser.Scene {
     this.rightMetaPanel?.destroy();
     this.cheatPopup?.destroy();
     this.cheatPopup = null;
+    this.missionPopup?.destroy();
+    this.missionPopup = null;
   }
 }

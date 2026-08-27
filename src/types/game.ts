@@ -40,6 +40,7 @@ export interface ScoreData {
 
 export interface SaveData {
   bestScore: number;
+  bestLandings: number;           // 단일 판 최고 착지 수
   totalJumps: number;
   gamesPlayed: number;
   soundEnabled: boolean;
@@ -52,6 +53,7 @@ export interface SaveData {
   roulettePaidSpinsToday: number; // 오늘 유료 스핀 횟수 (날짜 바뀌면 0 리셋)
   shieldItems: number;            // 룰렛 등으로 획득한 방어막 아이템 수량
   magnetItems: number;            // 룰렛 등으로 획득한 자석 아이템 수량
+  claimedMissions: string[];      // 수령 완료한 미션 ID 목록
 }
 
 export type SceneKey = 'BootScene' | 'PreloadScene' | 'TitleScene' | 'GameScene' | 'ResultScene' | 'ShopScene' | 'RouletteScene';

@@ -1,5 +1,6 @@
 import type { SaveData } from '@game-types/game';
 import { STORAGE_KEYS } from '@config/constants';
+import { ALL_MISSIONS } from '@config/missions';
 
 /**
  * 저장소 어댑터 인터페이스 — 추후 Capacitor Preferences로 교체 가능
@@ -30,6 +31,7 @@ class LocalStorageAdapter implements StorageAdapter {
 
 const DEFAULT_SAVE: SaveData = {
   bestScore: 0,
+  bestLandings: 0,
   totalJumps: 0,
   gamesPlayed: 0,
   soundEnabled: true,
@@ -42,6 +44,7 @@ const DEFAULT_SAVE: SaveData = {
   roulettePaidSpinsToday: 0,
   shieldItems: 0,
   magnetItems: 0,
+  claimedMissions: [],
 };
 
 export class SaveManager {
@@ -53,7 +56,8 @@ export class SaveManager {
     this.data = this.loadData();
   }
 
-  getBestScore(): number { return this.data.bestScore; }
+  getBestScore(): number    { return this.data.bestScore; }
+  getBestLandings(): number { return this.data.bestLandings; }
   isSoundEnabled(): boolean { return this.data.soundEnabled; }
   isVibrationEnabled(): boolean { return this.data.vibrationEnabled; }
 
@@ -194,10 +198,41 @@ export class SaveManager {
   submitScore(score: number, jumps: number): boolean {
     const isNewBest = score > this.data.bestScore;
     if (isNewBest) this.data.bestScore = score;
+    if (jumps > this.data.bestLandings) this.data.bestLandings = jumps;
     this.data.totalJumps += jumps;
     this.data.gamesPlayed += 1;
     this.persist();
     return isNewBest;
+  }
+
+  // ─── 미션 ─────────────────────────────────────────────────
+
+  getClaimedMissions(): ReadonlySet<string> {
+    return new Set(this.data.claimedMissions);
+  }
+
+  /** 미션을 수령 처리하고 코인을 지급. 이미 수령했거나 미달성이면 0 반환. */
+  claimMission(id: string): number {
+    if (this.data.claimedMissions.includes(id)) return 0;
+    const mission = ALL_MISSIONS.find((m) => m.id === id);
+    if (!mission) return 0;
+    const progress = mission.type === 'score'
+      ? this.data.bestScore
+      : this.data.bestLandings;
+    if (progress < mission.target) return 0;
+    this.data.claimedMissions.push(id);
+    this.addCoins(mission.coinReward);
+    return mission.coinReward;
+  }
+
+  /** 수령 가능한(달성됐지만 미수령인) 미션이 하나라도 있으면 true */
+  hasPendingMissions(): boolean {
+    const claimed = new Set(this.data.claimedMissions);
+    return ALL_MISSIONS.some((m) => {
+      if (claimed.has(m.id)) return false;
+      const progress = m.type === 'score' ? this.data.bestScore : this.data.bestLandings;
+      return progress >= m.target;
+    });
   }
 
   private loadData(): SaveData {
