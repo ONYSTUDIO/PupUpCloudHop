@@ -5,27 +5,20 @@ import { SaveManager } from '@managers/SaveManager';
 import { authService } from '../services/AuthService';
 import { TopHud } from '@ui/TopHud';
 import { MetaIconPanel } from '@ui/MetaIconPanel';
+import { CheatPopup, CheatSettings } from '@ui/CheatPopup';
 import { JumpPatternType } from '@game-types/game';
 import { UI_LAYOUT } from '@config/uiLayout';
-
-const SELECTABLE_PATTERNS: JumpPatternType[] = [
-  JumpPatternType.PATTERN_1,
-  JumpPatternType.PATTERN_2,
-  JumpPatternType.PATTERN_3,
-];
-
-const PATTERN_NAMES: Record<string, string> = {
-  [JumpPatternType.PATTERN_1]: '패턴 1  포물선',
-  [JumpPatternType.PATTERN_2]: '패턴 2  드래그',
-  [JumpPatternType.PATTERN_3]: '패턴 3  타이밍',
-};
 
 export class MainScene extends Phaser.Scene {
   private saveManager!: SaveManager;
   private topHud!: TopHud;
   private rightMetaPanel!: MetaIconPanel;
-  private selectedPattern: JumpPatternType = JumpPatternType.PATTERN_3;
-  private patternLabel!: Phaser.GameObjects.Text;
+  private cheatSettings: CheatSettings = {
+    pattern: JumpPatternType.PATTERN_3,
+    startWithShield: false,
+    startWithMagnet: false,
+  };
+  private cheatPopup: CheatPopup | null = null;
   private authUnsub: (() => void) | null = null;
 
   constructor() {
@@ -54,8 +47,8 @@ export class MainScene extends Phaser.Scene {
     // 캐릭터 (bounce tween)
     this.addCharacter();
 
-    // 패턴 셀렉터
-    this.addPatternSelector();
+    // 테스트 버튼
+    this.addTestButton();
 
     // 하단 버튼 2개
     this.addBottomButtons();
@@ -252,63 +245,37 @@ export class MainScene extends Phaser.Scene {
     g.fillEllipse(3, -10, 18, 12);
   }
 
-  // ─── 패턴 셀렉터 ──────────────────────────────────────────
+  // ─── 테스트 버튼 ──────────────────────────────────────────
 
-  private addPatternSelector(): void {
+  private addTestButton(): void {
     const cx = BASE_WIDTH / 2;
-    const cy = BASE_HEIGHT * 0.72;
-    const panelW = 860;
-    const panelH = 140;
+    const cy = BASE_HEIGHT * 0.75;
+    const btnW = 300;
+    const btnH = 90;
+
+    const bg = this.add.graphics().setDepth(DEPTH.HUD - 1);
+    bg.lineStyle(3, 0xffbb22, 0.9);
+    bg.strokeRoundedRect(cx - btnW / 2, cy - btnH / 2, btnW, btnH, 18);
+    bg.fillStyle(0x1a1a00, 0.6);
+    bg.fillRoundedRect(cx - btnW / 2, cy - btnH / 2, btnW, btnH, 18);
 
     this.add
-      .rectangle(cx, cy, panelW, panelH, 0x001166, 0.55)
-      .setOrigin(0.5).setDepth(DEPTH.HUD - 1)
-      .setStrokeStyle(2, 0x4466cc, 0.7);
-
-    this.add
-      .text(cx, cy - 34, '조작 방식', {
-        fontSize: '36px', color: '#99aaee',
-      })
-      .setOrigin(0.5).setDepth(DEPTH.HUD);
-
-    this.add
-      .text(cx - 370, cy + 22, '◀', {
-        fontSize: '60px', color: '#ffffff',
+      .text(cx, cy, '⚙ 테스트', {
+        fontSize: '44px', fontStyle: 'bold', color: '#ffbb22',
       })
       .setOrigin(0.5).setDepth(DEPTH.HUD)
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.cyclePattern(-1))
-      .on('pointerover', function (this: Phaser.GameObjects.Text) { this.setAlpha(0.7); })
-      .on('pointerout',  function (this: Phaser.GameObjects.Text) { this.setAlpha(1); });
-
-    this.patternLabel = this.add
-      .text(cx, cy + 22, '', {
-        fontSize: '52px', fontStyle: 'bold', color: '#ffffff',
-      })
-      .setOrigin(0.5).setDepth(DEPTH.HUD);
-
-    this.add
-      .text(cx + 370, cy + 22, '▶', {
-        fontSize: '60px', color: '#ffffff',
-      })
-      .setOrigin(0.5).setDepth(DEPTH.HUD)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.cyclePattern(1))
-      .on('pointerover', function (this: Phaser.GameObjects.Text) { this.setAlpha(0.7); })
-      .on('pointerout',  function (this: Phaser.GameObjects.Text) { this.setAlpha(1); });
-
-    this.updatePatternLabel();
+      .on('pointerdown', () => this.openCheatPopup())
+      .on('pointerover', () => bg.setAlpha(0.7))
+      .on('pointerout',  () => bg.setAlpha(1));
   }
 
-  private cyclePattern(dir: 1 | -1): void {
-    const idx = SELECTABLE_PATTERNS.indexOf(this.selectedPattern);
-    const next = (idx + dir + SELECTABLE_PATTERNS.length) % SELECTABLE_PATTERNS.length;
-    this.selectedPattern = SELECTABLE_PATTERNS[next]!;
-    this.updatePatternLabel();
-  }
-
-  private updatePatternLabel(): void {
-    this.patternLabel.setText(PATTERN_NAMES[this.selectedPattern] ?? '');
+  private openCheatPopup(): void {
+    if (this.cheatPopup) return;
+    this.cheatPopup = new CheatPopup(this, this.cheatSettings, (settings) => {
+      this.cheatSettings = settings;
+      this.cheatPopup = null;
+    });
   }
 
   // ─── 하단 버튼 2개 ────────────────────────────────────────
@@ -351,7 +318,11 @@ export class MainScene extends Phaser.Scene {
       .setOrigin(0.5).setDepth(DEPTH.HUD)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
-        this.scene.start(SCENE_KEYS.GAME, { pattern: this.selectedPattern });
+        this.scene.start(SCENE_KEYS.GAME, {
+          pattern: this.cheatSettings.pattern,
+          startWithShield: this.cheatSettings.startWithShield,
+          startWithMagnet: this.cheatSettings.startWithMagnet,
+        });
       })
       .on('pointerover', () => startBg.setAlpha(0.8))
       .on('pointerout',  () => startBg.setAlpha(1));
@@ -388,5 +359,7 @@ export class MainScene extends Phaser.Scene {
     this.authUnsub = null;
     this.topHud?.destroy();
     this.rightMetaPanel?.destroy();
+    this.cheatPopup?.destroy();
+    this.cheatPopup = null;
   }
 }

@@ -106,7 +106,7 @@ export class GameScene extends Phaser.Scene {
     super({ key: SCENE_KEYS.GAME });
   }
 
-  create(data?: { pattern?: JumpPatternType }): void {
+  create(data?: { pattern?: JumpPatternType; startWithShield?: boolean; startWithMagnet?: boolean }): void {
     this.jumpPattern = data?.pattern ?? JumpPatternType.PATTERN_3;
     this.isGameOver = false;
     this.isPaused = false;
@@ -158,6 +158,15 @@ export class GameScene extends Phaser.Scene {
     this.setupInput();
     this.setupCamera();
     this.setupVisibilityPause();
+
+    // 치트 설정 적용
+    if (data?.startWithShield) {
+      this.shieldSystem.activate();
+    }
+    if (data?.startWithMagnet) {
+      this.magnetSystem.activate();
+      this.scoreHud.showMagnetTimer(this.magnetSystem.timer);
+    }
 
     this.chargeIndicator = this.add.graphics().setDepth(DEPTH.PLAYER + 1);
     this.directionArrow = this.add.graphics().setDepth(DEPTH.PLAYER + 1);
