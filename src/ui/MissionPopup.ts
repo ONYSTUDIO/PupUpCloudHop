@@ -242,11 +242,16 @@ export class MissionPopup {
     if (isClaimed) {
       // ── 완료 표시 ────────────────────────────────────────
       const doneText = scene.add
-        .text(ROW_RIGHT - 20, rowCY, '완료', {
+        .text(ROW_RIGHT - 20, rowCY - 12, '완료', {
           fontSize: '34px', color: '#44bb66', fontStyle: 'bold',
         })
         .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
-      rowObjs.push(doneText);
+      const rewardClaimed = scene.add
+        .text(ROW_RIGHT - 20, rowCY + 16, `🪙 ${mission.coinReward}`, {
+          fontSize: '26px', color: '#3d6650',
+        })
+        .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
+      rowObjs.push(doneText, rewardClaimed);
 
     } else if (isComplete) {
       // ── 수령 버튼 ────────────────────────────────────────
@@ -302,7 +307,13 @@ export class MissionPopup {
         })
         .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
 
-      rowObjs.push(barG, progressText);
+      const rewardHint = scene.add
+        .text(ROW_RIGHT - 16, rowCY - 20, `🪙 ${mission.coinReward}`, {
+          fontSize: '28px', color: '#997722',
+        })
+        .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
+
+      rowObjs.push(rewardHint, barG, progressText);
     }
 
     return rowObjs;
