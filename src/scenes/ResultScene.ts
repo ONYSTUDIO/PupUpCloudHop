@@ -30,16 +30,16 @@ export class ResultScene extends Phaser.Scene {
       data.coinsEarned,
       data.totalCoins,
     );
-    void this.syncToDb(data.score.current, data.coinsEarned);
+    void this.syncToDb(data.score.current, data.score.jumps, data.coinsEarned);
   }
 
-  private async syncToDb(score: number, coinsEarned: number): Promise<void> {
+  private async syncToDb(score: number, landings: number, coinsEarned: number): Promise<void> {
     const user = await authService.getUser();
     if (!user) return;
     try {
       await Promise.all([
         profileService.addCoins(coinsEarned),
-        profileService.submitScore(score),
+        profileService.submitScore(score, landings),
       ]);
     } catch (e) {
       console.warn('[ResultScene] DB sync failed:', e);

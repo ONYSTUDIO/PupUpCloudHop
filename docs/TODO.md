@@ -229,6 +229,8 @@
 
 #### DB 연동 (Supabase)
 - [x] `profiles` 테이블에 `best_landings` 컬럼 추가
+- [x] `ProfileService.submitScore()`에 `landings` 파라미터 추가 → 새 최고 기록 시 `best_landings` DB 갱신
+- [x] `ResultScene.syncToDb()`에 `score.jumps` 전달 연결
 - [x] `claimed_missions` 테이블 신규 생성 (`(user_id, mission_type, mission_id)` 복합 PK)
 - [x] `claim_mission()` / `claim_all_missions()` / `get_claimed_missions()` / `reset_claimed_missions()` RPC 구현
 - [x] `MissionService` 신규 생성 (`src/services/MissionService.ts`)

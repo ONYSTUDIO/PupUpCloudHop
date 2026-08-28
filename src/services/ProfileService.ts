@@ -63,17 +63,19 @@ export class ProfileService {
    * 게임 종료 후 점수 제출.
    * 새 최고 기록이면 best_score도 갱신.
    */
-  async submitScore(score: number): Promise<{ isNewBest: boolean }> {
+  async submitScore(score: number, landings: number): Promise<{ isNewBest: boolean }> {
     const [profile, uid] = await Promise.all([this.getProfile(), this.getUserId()]);
     if (!profile) throw new Error('profile not found');
 
-    const isNewBest = score > profile.best_score;
+    const isNewBest        = score > profile.best_score;
+    const isNewBestLanding = landings > profile.best_landings;
 
     const { error } = await supabase
       .from('profiles')
       .update({
         total_play_count: profile.total_play_count + 1,
-        ...(isNewBest ? { best_score: score } : {}),
+        ...(isNewBest        ? { best_score: score }       : {}),
+        ...(isNewBestLanding ? { best_landings: landings } : {}),
       })
       .eq('id', uid);
 
