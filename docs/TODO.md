@@ -205,15 +205,40 @@
 ### 기타 확장
 - [ ] **구름섬 패턴 다양화**: 손으로 제작한 패턴 세트 도입
 - [ ] **캐릭터 스킨**: 다른 종류의 강아지, 고양이 등
-- [ ] **미션 시스템**: "10번 착지하기", "30점 이상 얻기" 등
 
 ### 메타 UI 아이콘 (구조 완료, 기능 미구현)
 > `MetaIconPanel` 구조는 준비됨. `GameScene.setupUILayers()` 에서 `rightMetaPanel.addIcon()` 으로 추가.
 - [x] 상점 진입 아이콘 (우측 패널 1번째) — 임시 그래픽, 추후 스프라이트 교체 예정
 - [x] **룰렛 진입 아이콘 (우측 패널 2번째)** — 무료 스핀 시 FREE 뱃지 표시, RouletteScene 연결
-- [ ] 미션 진입 아이콘 (우측 패널 3번째)
+- [x] **미션 진입 아이콘 (우측 패널 3번째)** — 수령 가능 시 빨간 뱃지 표시, MissionPopup 연결
 - [ ] 출석 진입 아이콘 (우측 패널 4번째)
 - [ ] 좌측 패널 아이콘 구성 결정 (현재 비워둠)
+
+---
+
+### 🎯 미션 시스템 (MissionPopup) — 구현 완료
+
+#### 구현 완료
+- [x] `src/config/missions.ts` — 착지 미션 6단계 / 점수 미션 4단계 정의
+- [x] `SaveManager`에 `bestLandings`, `claimedMissions` 필드 추가
+- [x] `SaveManager`에 `claimMission()`, `hasPendingMissions()`, `getClaimedMissions()` 메서드 추가
+- [x] `MissionPopup` UI — 착지/점수 탭 전환, 진행 바, 수령 버튼, 완료 표시
+- [x] 진행 중 행 / 수령 가능 행 / 완료 행 각 상태별 보상 표시 (`🪙 N`)
+- [x] 메인 화면 미션 아이콘 + 수령 가능 시 빨간 뱃지 표시
+
+#### DB 연동 (Supabase)
+- [ ] `profiles` 테이블에 `best_landings` 컬럼 추가
+- [ ] `claimed_missions` 테이블 신규 생성 (user_id, mission_id, claimed_at)
+- [ ] `claim_mission(mission_id)` RPC 구현 (중복 수령 방지 + 코인 지급 원자 처리)
+- [ ] `MissionService` 신규 생성 (수령 내역 조회 / RPC 래핑)
+- [ ] `MissionPopup`에 Supabase 백그라운드 동기화 연결 (로컬 우선, 실패 시 무중단)
+- [ ] `database.types.ts` 신규 테이블·컬럼·RPC 타입 반영
+
+#### 한 번에 획득 기능
+- [ ] 수령 가능한 미션이 2개 이상일 때 팝업 하단에 "모두 수령" 버튼 표시
+- [ ] 버튼 클릭 시 미수령 완료 미션 전부 일괄 처리 + 총 보상 합산 지급
+- [ ] 일괄 수령 후 각 행 UI 상태 일괄 갱신 (버튼 숨김 → 완료 표시 전환)
+- [ ] DB 연동 시 일괄 수령도 RPC 단일 트랜잭션으로 처리
 
 ---
 
