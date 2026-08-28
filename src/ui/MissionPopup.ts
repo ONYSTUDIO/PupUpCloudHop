@@ -3,6 +3,7 @@ import { BASE_WIDTH, BASE_HEIGHT } from '@config/baseDimensions';
 import { DEPTH } from '@config/constants';
 import { LANDING_MISSIONS, SCORE_MISSIONS, type MissionDef } from '@config/missions';
 import type { SaveManager } from '@managers/SaveManager';
+import { missionService } from '@services/MissionService';
 
 const CX = BASE_WIDTH / 2;
 const PANEL_W = 760;
@@ -75,7 +76,12 @@ export class MissionPopup {
       const progress = bestLandings;
       const rows = this.buildRow(scene, m, firstRowCY(i), progress, claimed.has(m.id), () => {
         const reward = saveManager.claimMission(m.id);
-        if (reward > 0) onCoinsChanged();
+        if (reward > 0) {
+          onCoinsChanged();
+          missionService.claimMission(m).catch((e: unknown) => {
+            console.warn('[MissionService] claim failed', e);
+          });
+        }
       });
       rows.forEach((o) => { this.reg(o); this.landingTabObjs.push(o); });
     });
@@ -84,7 +90,12 @@ export class MissionPopup {
       const progress = bestScore;
       const rows = this.buildRow(scene, m, firstRowCY(i), progress, claimed.has(m.id), () => {
         const reward = saveManager.claimMission(m.id);
-        if (reward > 0) onCoinsChanged();
+        if (reward > 0) {
+          onCoinsChanged();
+          missionService.claimMission(m).catch((e: unknown) => {
+            console.warn('[MissionService] claim failed', e);
+          });
+        }
       });
       rows.forEach((o) => { this.reg(o); this.scoreTabObjs.push(o); });
     });

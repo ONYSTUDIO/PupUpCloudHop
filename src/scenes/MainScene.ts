@@ -3,6 +3,7 @@ import { SCENE_KEYS, DEPTH } from '@config/constants';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/baseDimensions';
 import { SaveManager } from '@managers/SaveManager';
 import { authService } from '../services/AuthService';
+import { missionService } from '@services/MissionService';
 import { TopHud } from '@ui/TopHud';
 import { MetaIconPanel } from '@ui/MetaIconPanel';
 import { CheatPopup, CheatSettings } from '@ui/CheatPopup';
@@ -367,10 +368,21 @@ export class MainScene extends Phaser.Scene {
 
   private openCheatPopup(): void {
     if (this.cheatPopup) return;
-    this.cheatPopup = new CheatPopup(this, this.cheatSettings, (settings) => {
-      this.cheatSettings = settings;
-      this.cheatPopup = null;
-    });
+    this.cheatPopup = new CheatPopup(
+      this,
+      this.cheatSettings,
+      (settings) => {
+        this.cheatSettings = settings;
+        this.cheatPopup = null;
+      },
+      () => {
+        this.saveManager.resetClaimedMissions();
+        this.refreshMissionBadge();
+        missionService.resetClaimedMissions().catch((e: unknown) => {
+          console.warn('[MissionService] reset failed', e);
+        });
+      },
+    );
   }
 
   // ─── 하단 버튼 2개 ────────────────────────────────────────

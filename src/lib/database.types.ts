@@ -12,6 +12,7 @@ export interface Database {
           coins: number;
           diamonds: number;
           best_score: number;
+          best_landings: number;
           total_play_count: number;
           last_roulette_date: string | null;     // 'YYYY-MM-DD'
           roulette_paid_spins_today: number;
@@ -26,6 +27,7 @@ export interface Database {
           coins?: number;
           diamonds?: number;
           best_score?: number;
+          best_landings?: number;
           total_play_count?: number;
           last_roulette_date?: string | null;
           roulette_paid_spins_today?: number;
@@ -39,12 +41,36 @@ export interface Database {
           coins?: number;
           diamonds?: number;
           best_score?: number;
+          best_landings?: number;
           total_play_count?: number;
           last_roulette_date?: string | null;
           roulette_paid_spins_today?: number;
           updated_at?: string;
         };
         Relationships: [];
+      };
+      claimed_missions: {
+        Row: {
+          user_id: string;
+          mission_type: number;   // 1=착지, 2=점수
+          mission_id: number;     // 타입 내 단계 순번 (MissionDef.stage)
+          claimed_at: string;
+        };
+        Insert: {
+          user_id: string;
+          mission_type: number;
+          mission_id: number;
+          claimed_at?: string;
+        };
+        Update: Record<string, never>;
+        Relationships: [
+          {
+            foreignKeyName: 'claimed_missions_user_id_fkey';
+            columns: ['user_id'];
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       player_inventory: {
         Row: {
@@ -97,6 +123,22 @@ export interface Database {
         Args: { p_item_type: string; p_amount: number };
         Returns: number;
       };
+      claim_mission: {
+        Args: { p_mission_type: number; p_mission_id: number; p_coin_reward: number };
+        Returns: number;
+      };
+      claim_all_missions: {
+        Args: { p_missions: Json };
+        Returns: number;
+      };
+      get_claimed_missions: {
+        Args: Record<string, never>;
+        Returns: Json;   // [{ mission_type: number; mission_id: number }]
+      };
+      reset_claimed_missions: {
+        Args: Record<string, never>;
+        Returns: void;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
@@ -105,3 +147,4 @@ export interface Database {
 
 export type Profile = Database['public']['Tables']['profiles']['Row'];
 export type InventoryRow = Database['public']['Tables']['player_inventory']['Row'];
+export type ClaimedMissionRow = Database['public']['Tables']['claimed_missions']['Row'];

@@ -219,26 +219,27 @@
 ### 🎯 미션 시스템 (MissionPopup) — 구현 완료
 
 #### 구현 완료
-- [x] `src/config/missions.ts` — 착지 미션 6단계 / 점수 미션 4단계 정의
+- [x] `src/config/missions.ts` — 착지 미션 6단계 / 점수 미션 4단계 정의, `stage` 필드 + `MISSION_TYPE_ID` 상수 추가
 - [x] `SaveManager`에 `bestLandings`, `claimedMissions` 필드 추가
-- [x] `SaveManager`에 `claimMission()`, `hasPendingMissions()`, `getClaimedMissions()` 메서드 추가
+- [x] `SaveManager`에 `claimMission()`, `hasPendingMissions()`, `getClaimedMissions()`, `resetClaimedMissions()` 메서드 추가
 - [x] `MissionPopup` UI — 착지/점수 탭 전환, 진행 바, 수령 버튼, 완료 표시
 - [x] 진행 중 행 / 수령 가능 행 / 완료 행 각 상태별 보상 표시 (`🪙 N`)
 - [x] 메인 화면 미션 아이콘 + 수령 가능 시 빨간 뱃지 표시
+- [x] CheatPopup에 '미션 초기화' 버튼 추가 (localStorage + DB 동시 초기화)
 
 #### DB 연동 (Supabase)
-- [ ] `profiles` 테이블에 `best_landings` 컬럼 추가
-- [ ] `claimed_missions` 테이블 신규 생성 (user_id, mission_id, claimed_at)
-- [ ] `claim_mission(mission_id)` RPC 구현 (중복 수령 방지 + 코인 지급 원자 처리)
-- [ ] `MissionService` 신규 생성 (수령 내역 조회 / RPC 래핑)
-- [ ] `MissionPopup`에 Supabase 백그라운드 동기화 연결 (로컬 우선, 실패 시 무중단)
-- [ ] `database.types.ts` 신규 테이블·컬럼·RPC 타입 반영
+- [x] `profiles` 테이블에 `best_landings` 컬럼 추가
+- [x] `claimed_missions` 테이블 신규 생성 (`(user_id, mission_type, mission_id)` 복합 PK)
+- [x] `claim_mission()` / `claim_all_missions()` / `get_claimed_missions()` / `reset_claimed_missions()` RPC 구현
+- [x] `MissionService` 신규 생성 (`src/services/MissionService.ts`)
+- [x] `MissionPopup`에 Supabase 백그라운드 동기화 연결 (로컬 우선, 실패 시 무중단)
+- [x] `database.types.ts` — `claimed_missions` 테이블·`best_landings`·미션 RPC 타입 반영
 
 #### 한 번에 획득 기능
 - [ ] 수령 가능한 미션이 2개 이상일 때 팝업 하단에 "모두 수령" 버튼 표시
 - [ ] 버튼 클릭 시 미수령 완료 미션 전부 일괄 처리 + 총 보상 합산 지급
 - [ ] 일괄 수령 후 각 행 UI 상태 일괄 갱신 (버튼 숨김 → 완료 표시 전환)
-- [ ] DB 연동 시 일괄 수령도 RPC 단일 트랜잭션으로 처리
+- [x] DB — `claim_all_missions()` RPC 단일 트랜잭션으로 구현 완료 (UI 연결 시 사용 가능)
 
 ---
 

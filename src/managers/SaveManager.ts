@@ -225,6 +225,12 @@ export class SaveManager {
     return mission.coinReward;
   }
 
+  /** [테스트용] 수령 완료 미션을 모두 초기화해 다시 수령 가능 상태로 되돌린다. */
+  resetClaimedMissions(): void {
+    this.data.claimedMissions = [];
+    this.persist();
+  }
+
   /** 수령 가능한(달성됐지만 미수령인) 미션이 하나라도 있으면 true */
   hasPendingMissions(): boolean {
     const claimed = new Set(this.data.claimedMissions);

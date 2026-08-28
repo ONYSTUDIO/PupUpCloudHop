@@ -16,6 +16,7 @@ Supabase Auth의 `auth.users`와 1:1 연결. 구글/애플/페이스북 OAuth �
 | `coins` | integer | 0 | 소프트 커런시 (코인) |
 | `diamonds` | integer | 0 | 하드 커런시 (다이아몬드) |
 | `best_score` | integer | 0 | 역대 최고 점수 |
+| `best_landings` | integer | 0 | 단일 판 최고 착지 횟수. 착지 미션 달성 판별에 사용 |
 | `total_play_count` | integer | 0 | 총 플레이 횟수 |
 | `last_roulette_date` | date | null | 마지막 스핀 날짜 (null = 미사용). 무료 스핀 여부 판별 |
 | `roulette_paid_spins_today` | smallint | 0 | 당일 유료 스핀 횟수 (0~3). 날짜 바뀌면 앱에서 리셋 |
@@ -170,6 +171,7 @@ $$;
 ## 관련 문서
 
 - [룰렛 상태 마이그레이션](./add_roulette_state.md)
+- [미션 수령 테이블 + best_landings 마이그레이션](./claimed_missions.md)
 - [player_inventory 테이블](./player_inventory.md)
 - [재화 시스템 설계](../CURRENCY_DESIGN.md)
 - [기술 스택](../TECH_STACK.md)

@@ -24,7 +24,7 @@ export interface CheatSettings {
 const CX = BASE_WIDTH / 2;
 const CY = BASE_HEIGHT / 2;
 const PANEL_W = 780;
-const PANEL_H = 740;
+const PANEL_H = 880;
 
 export class CheatPopup {
   private objs: Phaser.GameObjects.GameObject[] = [];
@@ -42,6 +42,7 @@ export class CheatPopup {
     scene: Phaser.Scene,
     initial: CheatSettings,
     onClose: (s: CheatSettings) => void,
+    onResetMissions: () => void,
   ) {
     this.pattern = initial.pattern;
     this.shield = initial.startWithShield;
@@ -132,9 +133,41 @@ export class CheatPopup {
       this.refreshToggle(this.magnetBtn, this.magnet);
     });
 
+    // ── 구분선 2 ─────────────────────────────────────────────
+    const divG2 = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPUP);
+    divG2.lineStyle(1, 0x334466, 0.7);
+    divG2.beginPath();
+    divG2.moveTo(CX - PANEL_W / 2 + 40, CY + 238);
+    divG2.lineTo(CX + PANEL_W / 2 - 40, CY + 238);
+    divG2.strokePath();
+    this.reg(divG2);
+
+    // ── 미션 초기화 ──────────────────────────────────────────
+    this.reg(
+      scene.add.text(CX - 80, CY + 300, '미션 초기화', {
+        fontSize: '46px', color: '#ffccaa',
+      }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP),
+    );
+    const resetBtn = scene.add.text(CX + 120, CY + 300, '초기화', {
+      fontSize: '44px', fontStyle: 'bold', color: '#ffffff',
+      backgroundColor: '#883311', padding: { x: 32, y: 14 },
+      fixedWidth: 160, align: 'center',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.POPUP)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerover', function (this: Phaser.GameObjects.Text) { this.setAlpha(0.85); })
+      .on('pointerout',  function (this: Phaser.GameObjects.Text) { this.setAlpha(1); })
+      .on('pointerdown', () => {
+        onResetMissions();
+        resetBtn.setText('완료!');
+        scene.time.delayedCall(1200, () => {
+          if (!this.destroyed) resetBtn.setText('초기화');
+        });
+      });
+    this.reg(resetBtn);
+
     // ── 닫기 버튼 ────────────────────────────────────────────
     this.reg(
-      scene.add.text(CX, CY + 315, '닫기', {
+      scene.add.text(CX, CY + 410, '닫기', {
         fontSize: '56px', fontStyle: 'bold', color: '#ffffff',
         backgroundColor: '#2a5a80', padding: { x: 80, y: 22 },
       }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.POPUP)
