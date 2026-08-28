@@ -7,11 +7,11 @@ import { missionService } from '@services/MissionService';
 
 const CX = BASE_WIDTH / 2;
 const PANEL_W = 760;
-const PANEL_H = 920;
-const PANEL_TOP  = BASE_HEIGHT / 2 - PANEL_H / 2;   // 500
-const PANEL_BOT  = PANEL_TOP + PANEL_H;               // 1420
+const PANEL_H = 1020;
+const PANEL_TOP  = BASE_HEIGHT / 2 - PANEL_H / 2;
+const PANEL_BOT  = PANEL_TOP + PANEL_H;
 
-const ROW_W    = PANEL_W - 60;   // 700
+const ROW_W    = PANEL_W - 60;
 const ROW_H    = 96;
 const ROW_GAP  = 6;
 const ROW_STEP = ROW_H + ROW_GAP;
@@ -19,7 +19,6 @@ const ROW_LEFT  = CX - ROW_W / 2;
 const ROW_RIGHT = CX + ROW_W / 2;
 const CONTENT_TOP = PANEL_TOP + 192;
 
-// 탭 내 아이템 목록별 첫 행 중심 Y
 const firstRowCY = (idx: number): number =>
   CONTENT_TOP + ROW_H / 2 + idx * ROW_STEP;
 
@@ -36,6 +35,12 @@ export class MissionPopup {
   private scoreTabBg!:   Phaser.GameObjects.Graphics;
   private landingTabText!: Phaser.GameObjects.Text;
   private scoreTabText!:   Phaser.GameObjects.Text;
+
+  // 탭별 수령 가능 행 트리거 목록
+  private landingClaimableRows: Array<() => void> = [];
+  private scoreClaimableRows:   Array<() => void> = [];
+  private currentTab: TabKey = 'landing';
+  private claimAllBtn: Phaser.GameObjects.Text | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -73,38 +78,78 @@ export class MissionPopup {
     const bestScore    = saveManager.getBestScore();
 
     LANDING_MISSIONS.forEach((m, i) => {
-      const progress = bestLandings;
-      const rows = this.buildRow(scene, m, firstRowCY(i), progress, claimed.has(m.id), () => {
-        const reward = saveManager.claimMission(m.id);
-        if (reward > 0) {
-          onCoinsChanged();
-          missionService.claimMission(m).catch((e: unknown) => {
-            console.warn('[MissionService] claim failed', e);
-          });
-        }
-      });
-      rows.forEach((o) => { this.reg(o); this.landingTabObjs.push(o); });
+      let myTrigger: (() => void) | undefined;
+      const { objs, triggerClaim } = this.buildRow(
+        scene, m, firstRowCY(i), bestLandings, claimed.has(m.id), this.landingTabObjs,
+        () => {
+          const reward = saveManager.claimMission(m.id);
+          if (reward > 0) {
+            onCoinsChanged();
+            if (myTrigger) {
+              const idx = this.landingClaimableRows.indexOf(myTrigger);
+              if (idx >= 0) this.landingClaimableRows.splice(idx, 1);
+            }
+            this.refreshClaimAllBtn();
+            missionService.claimMission(m).catch((e: unknown) => {
+              console.warn('[MissionService] claim failed', e);
+            });
+          }
+        },
+      );
+      myTrigger = triggerClaim;
+      objs.forEach((o) => { this.reg(o); this.landingTabObjs.push(o); });
+      if (triggerClaim) this.landingClaimableRows.push(triggerClaim);
     });
 
     SCORE_MISSIONS.forEach((m, i) => {
-      const progress = bestScore;
-      const rows = this.buildRow(scene, m, firstRowCY(i), progress, claimed.has(m.id), () => {
-        const reward = saveManager.claimMission(m.id);
-        if (reward > 0) {
-          onCoinsChanged();
-          missionService.claimMission(m).catch((e: unknown) => {
-            console.warn('[MissionService] claim failed', e);
-          });
-        }
-      });
-      rows.forEach((o) => { this.reg(o); this.scoreTabObjs.push(o); });
+      let myTrigger: (() => void) | undefined;
+      const { objs, triggerClaim } = this.buildRow(
+        scene, m, firstRowCY(i), bestScore, claimed.has(m.id), this.scoreTabObjs,
+        () => {
+          const reward = saveManager.claimMission(m.id);
+          if (reward > 0) {
+            onCoinsChanged();
+            if (myTrigger) {
+              const idx = this.scoreClaimableRows.indexOf(myTrigger);
+              if (idx >= 0) this.scoreClaimableRows.splice(idx, 1);
+            }
+            this.refreshClaimAllBtn();
+            missionService.claimMission(m).catch((e: unknown) => {
+              console.warn('[MissionService] claim failed', e);
+            });
+          }
+        },
+      );
+      myTrigger = triggerClaim;
+      objs.forEach((o) => { this.reg(o); this.scoreTabObjs.push(o); });
+      if (triggerClaim) this.scoreClaimableRows.push(triggerClaim);
     });
+
+    // ── 모두 수령 버튼 ─────────────────────────────────────
+    this.claimAllBtn = scene.add
+      .text(CX, PANEL_BOT - 160, '모두 수령', {
+        fontSize: '48px', fontStyle: 'bold', color: '#ffffff',
+        backgroundColor: '#996600', padding: { x: 60, y: 18 },
+      })
+      .setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.POPUP)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerover', function (this: Phaser.GameObjects.Text) { this.setAlpha(0.85); })
+      .on('pointerout',  function (this: Phaser.GameObjects.Text) { this.setAlpha(1); })
+      .on('pointerdown', () => {
+        if (this.destroyed) return;
+        const rows = this.currentTab === 'landing'
+          ? [...this.landingClaimableRows]
+          : [...this.scoreClaimableRows];
+        if (rows.length < 2) return;
+        rows.forEach((trigger) => trigger());
+      });
+    this.reg(this.claimAllBtn);
 
     this.showTab('landing');
 
     // ── 닫기 버튼 ──────────────────────────────────────────
     this.reg(
-      scene.add.text(CX, PANEL_BOT - 55, '닫기', {
+      scene.add.text(CX, PANEL_BOT - 60, '닫기', {
         fontSize: '54px', fontStyle: 'bold', color: '#ffffff',
         backgroundColor: '#2a4a66', padding: { x: 80, y: 20 },
       }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.POPUP)
@@ -132,7 +177,6 @@ export class MissionPopup {
     const TAB_Y = PANEL_TOP + 128;
     const TAB_W = PANEL_W / 2;
 
-    // 착지 탭
     this.landingTabBg = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPUP);
     this.reg(this.landingTabBg);
 
@@ -145,7 +189,6 @@ export class MissionPopup {
       .on('pointerdown', () => this.showTab('landing'));
     this.reg(this.landingTabText);
 
-    // 점수 탭
     this.scoreTabBg = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPUP);
     this.reg(this.scoreTabBg);
 
@@ -158,7 +201,6 @@ export class MissionPopup {
       .on('pointerdown', () => this.showTab('score'));
     this.reg(this.scoreTabText);
 
-    // 구분선
     const divG = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPUP);
     divG.lineStyle(1, 0x334466, 0.6);
     divG.beginPath();
@@ -167,15 +209,26 @@ export class MissionPopup {
     divG.strokePath();
     this.reg(divG);
 
-    // 탭 배경 초기 드로우
     this.drawTabBgs('landing');
   }
 
   private showTab(tab: TabKey): void {
+    this.currentTab = tab;
     const showLanding = tab === 'landing';
     this.landingTabObjs.forEach((o) => { if ('setVisible' in o) (o as Phaser.GameObjects.GameObject & { setVisible: (v: boolean) => void }).setVisible(showLanding); });
     this.scoreTabObjs.forEach((o)   => { if ('setVisible' in o) (o as Phaser.GameObjects.GameObject & { setVisible: (v: boolean) => void }).setVisible(!showLanding); });
     this.drawTabBgs(tab);
+    this.refreshClaimAllBtn();
+  }
+
+  private refreshClaimAllBtn(): void {
+    if (!this.claimAllBtn) return;
+    const rows = this.currentTab === 'landing' ? this.landingClaimableRows : this.scoreClaimableRows;
+    const active = rows.length >= 2;
+    this.claimAllBtn.setStyle({
+      color:           active ? '#ffffff' : '#555566',
+      backgroundColor: active ? '#996600' : '#1e1e2a',
+    });
   }
 
   private drawTabBgs(active: TabKey): void {
@@ -216,23 +269,22 @@ export class MissionPopup {
     rowCY: number,
     progress: number,
     isClaimed: boolean,
+    tabObjs: Phaser.GameObjects.GameObject[],
     onClaim: () => void,
-  ): Phaser.GameObjects.GameObject[] {
+  ): { objs: Phaser.GameObjects.GameObject[]; triggerClaim?: () => void } {
     const isComplete = progress >= mission.target;
     const ratio = Math.min(1, progress / mission.target);
 
     const bgColor     = isClaimed ? 0x0f2216 : isComplete ? 0x1e1200 : 0x0d1624;
     const borderColor = isClaimed ? 0x336644 : isComplete ? 0xaa6600 : 0x263852;
 
-    // 배경
     const bgG = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPUP);
     bgG.fillStyle(bgColor, 0.9);
     bgG.fillRoundedRect(ROW_LEFT, rowCY - ROW_H / 2, ROW_W, ROW_H, 12);
     bgG.lineStyle(2, borderColor, 0.9);
     bgG.strokeRoundedRect(ROW_LEFT, rowCY - ROW_H / 2, ROW_W, ROW_H, 12);
 
-    // 상태 아이콘
-    const iconText = isClaimed ? '✓' : isComplete ? '!' : '○';
+    const iconText  = isClaimed ? '✓' : isComplete ? '!' : '○';
     const iconColor = isClaimed ? '#44bb66' : isComplete ? '#ffbb22' : '#445566';
     const statusIcon = scene.add
       .text(ROW_LEFT + 30, rowCY, iconText, {
@@ -240,7 +292,6 @@ export class MissionPopup {
       })
       .setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
 
-    // 레이블
     const labelColor = isClaimed ? '#557766' : '#ddeeff';
     const label = scene.add
       .text(ROW_LEFT + 62, rowCY - (isComplete || isClaimed ? 0 : 14), mission.label, {
@@ -263,6 +314,7 @@ export class MissionPopup {
         })
         .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
       rowObjs.push(doneText, rewardClaimed);
+      return { objs: rowObjs };
 
     } else if (isComplete) {
       // ── 수령 버튼 ────────────────────────────────────────
@@ -274,28 +326,44 @@ export class MissionPopup {
         .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP)
         .setInteractive({ useHandCursor: true })
         .on('pointerover', function (this: Phaser.GameObjects.Text) { this.setAlpha(0.85); })
-        .on('pointerout',  function (this: Phaser.GameObjects.Text) { this.setAlpha(1); })
-        .on('pointerdown', () => {
-          if (!claimBtn.visible) return;
-          claimBtn.setVisible(false);
-          // 배경 색상을 완료 상태로 전환
-          bgG.clear();
-          bgG.fillStyle(0x0f2216, 0.9);
-          bgG.fillRoundedRect(ROW_LEFT, rowCY - ROW_H / 2, ROW_W, ROW_H, 12);
-          bgG.lineStyle(2, 0x336644, 0.9);
-          bgG.strokeRoundedRect(ROW_LEFT, rowCY - ROW_H / 2, ROW_W, ROW_H, 12);
-          statusIcon.setText('✓').setColor('#44bb66');
-          label.setColor('#557766');
-          // "완료" 텍스트 (scene에 직접 추가, this.objs로 나중에 정리)
-          const doneText = scene.add
-            .text(ROW_RIGHT - 20, rowCY, '완료', {
-              fontSize: '34px', color: '#44bb66', fontStyle: 'bold',
-            })
-            .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
-          this.objs.push(doneText);
-          onClaim();
-        });
+        .on('pointerout',  function (this: Phaser.GameObjects.Text) { this.setAlpha(1); });
+
+      let alreadyClaimed = false;
+
+      const doClaimRow = () => {
+        if (alreadyClaimed) return;
+        alreadyClaimed = true;
+        claimBtn.setVisible(false);
+        bgG.clear();
+        bgG.fillStyle(0x0f2216, 0.9);
+        bgG.fillRoundedRect(ROW_LEFT, rowCY - ROW_H / 2, ROW_W, ROW_H, 12);
+        bgG.lineStyle(2, 0x336644, 0.9);
+        bgG.strokeRoundedRect(ROW_LEFT, rowCY - ROW_H / 2, ROW_W, ROW_H, 12);
+        statusIcon.setText('✓').setColor('#44bb66');
+        label.setColor('#557766');
+        const doneText = scene.add
+          .text(ROW_RIGHT - 20, rowCY - 12, '완료', {
+            fontSize: '34px', color: '#44bb66', fontStyle: 'bold',
+          })
+          .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
+        const rewardDone = scene.add
+          .text(ROW_RIGHT - 20, rowCY + 16, `🪙 ${mission.coinReward}`, {
+            fontSize: '26px', color: '#3d6650',
+          })
+          .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
+        // tabObjs 등록: 탭 전환 시 가시성 올바르게 관리됨
+        this.objs.push(doneText, rewardDone);
+        tabObjs.push(doneText, rewardDone);
+        onClaim();
+      };
+
+      claimBtn.on('pointerdown', () => {
+        if (!claimBtn.visible) return;
+        doClaimRow();
+      });
+
       rowObjs.push(claimBtn);
+      return { objs: rowObjs, triggerClaim: doClaimRow };
 
     } else {
       // ── 진행 바 + 수치 ───────────────────────────────────
@@ -325,9 +393,8 @@ export class MissionPopup {
         .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
 
       rowObjs.push(rewardHint, barG, progressText);
+      return { objs: rowObjs };
     }
-
-    return rowObjs;
   }
 
   // ─── 헬퍼 ────────────────────────────────────────────────
