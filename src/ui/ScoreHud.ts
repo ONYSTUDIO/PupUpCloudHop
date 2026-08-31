@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { ScoreData } from '@game-types/game';
 import { BASE_WIDTH } from '@config/baseDimensions';
-import { EVENTS, DEPTH } from '@config/constants';
+import { EVENTS, DEPTH, ITEM_CONFIG } from '@config/constants';
 import { UI_LAYOUT } from '@config/uiLayout';
 
 const TOP = UI_LAYOUT.hud.top;
@@ -25,6 +25,10 @@ const MAGNET_BAR_Y  = MAGNET_TEXT_Y + 54;
 const FREEZE_TEXT_Y = MAGNET_BAR_Y + 52;
 const FREEZE_BAR_Y  = FREEZE_TEXT_Y + 54;
 
+// 타임슬로우 타이머 (구름 동결 타이머 아래)
+const SLOW_TEXT_Y = FREEZE_BAR_Y + 52;
+const SLOW_BAR_Y  = SLOW_TEXT_Y + 54;
+
 const CX = BASE_WIDTH / 2; // 540
 
 export class ScoreHud {
@@ -45,6 +49,10 @@ export class ScoreHud {
   // 구름 동결 타이머
   private freezeTimerBg: Phaser.GameObjects.Graphics | null = null;
   private freezeTimerText: Phaser.GameObjects.Text | null = null;
+
+  // 타임슬로우 타이머
+  private slowTimerBg: Phaser.GameObjects.Graphics | null = null;
+  private slowTimerText: Phaser.GameObjects.Text | null = null;
 
   constructor(scene: Phaser.Scene, bestScore: number) {
     this.scene = scene;
@@ -196,6 +204,49 @@ export class ScoreHud {
     this.freezeTimerText?.setVisible(false);
   }
 
+  // ─── 타임슬로우 타이머 ──────────────────────────────────────
+
+  showSlowTimer(seconds: number): void {
+    if (!this.slowTimerBg) {
+      this.slowTimerBg = this.scene.add.graphics()
+        .setScrollFactor(0).setDepth(DEPTH.HUD);
+    }
+    if (!this.slowTimerText) {
+      this.slowTimerText = this.scene.add
+        .text(CX, SLOW_TEXT_Y, '', {
+          fontSize: '48px', fontStyle: 'bold',
+          color: '#dd99ff', stroke: '#220033', strokeThickness: 6,
+        })
+        .setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.HUD);
+    }
+    this.updateSlowTimer(seconds);
+    this.slowTimerBg.setVisible(true);
+    this.slowTimerText.setVisible(true);
+  }
+
+  updateSlowTimer(seconds: number): void {
+    const s = Math.max(0, seconds);
+    this.slowTimerText?.setText(`⏱  ${s.toFixed(1)}`);
+
+    const bg = this.slowTimerBg;
+    if (!bg) return;
+    bg.clear();
+    const barW  = 260;
+    const barH  = 12;
+    const ratio = s / ITEM_CONFIG.TIME_SLOW_DURATION_SEC;
+    bg.fillStyle(0x000000, 0.35);
+    bg.fillRoundedRect(CX - barW / 2 - 4, SLOW_BAR_Y - 4, barW + 8, barH + 8, 7);
+    bg.fillStyle(0xaa55ee, 0.88);
+    bg.fillRoundedRect(CX - barW / 2, SLOW_BAR_Y, barW * ratio, barH, 5);
+    bg.fillStyle(0x555555, 0.4);
+    bg.fillRoundedRect(CX - barW / 2 + barW * ratio, SLOW_BAR_Y, barW * (1 - ratio), barH, 5);
+  }
+
+  hideSlowTimer(): void {
+    this.slowTimerBg?.setVisible(false);
+    this.slowTimerText?.setVisible(false);
+  }
+
   // ─── destroy ────────────────────────────────────────────────
 
   destroy(): void {
@@ -208,6 +259,8 @@ export class ScoreHud {
     this.magnetTimerText?.destroy();
     this.freezeTimerBg?.destroy();
     this.freezeTimerText?.destroy();
+    this.slowTimerBg?.destroy();
+    this.slowTimerText?.destroy();
   }
 
   // ─── private ────────────────────────────────────────────────

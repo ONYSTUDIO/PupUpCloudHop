@@ -53,6 +53,12 @@ export const ITEM_CONFIG = {
   ICE_ITEM_SPAWN_MIN: 4,        // 얼음 아이템 최소 스폰 간격 (패턴1 구름 기준)
   ICE_ITEM_SPAWN_MAX: 9,        // 얼음 아이템 최대 스폰 간격
   ICE_ITEM_HOVER_Y: 88,         // 구름 상단에서 아이템 띄우는 높이 (px)
+  // 인게임 타임슬로우 아이템
+  TIME_SLOW_DURATION_SEC: 8,    // 타임슬로우 지속 시간 (초)
+  TIME_SLOW_FACTOR: 0.25,       // 게임 세계 delta 배율 (0.25 = 25% 속도, 75% 감속)
+  TIME_SLOW_ITEM_SPAWN_MIN: 5,  // 아이템 최소 스폰 간격 (패턴1 구름 기준)
+  TIME_SLOW_ITEM_SPAWN_MAX: 10, // 아이템 최대 스폰 간격
+  TIME_SLOW_ITEM_HOVER_Y: 86,   // 구름 상단에서 아이템 띄우는 높이 (px)
 } as const;
 
 // 동적 구름 스폰 / 디스폰 설정
