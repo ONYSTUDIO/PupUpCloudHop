@@ -78,6 +78,8 @@ export class MagnetItemSystem {
     }
   }
 
+  get attachedCloudId(): string | null { return this.attachedCloud?.id ?? null; }
+
   clearAll(): void {
     this.removeMagnet();
   }

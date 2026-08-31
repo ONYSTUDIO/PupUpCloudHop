@@ -48,6 +48,11 @@ export const ITEM_CONFIG = {
   MAGNET_ITEM_SPAWN_MIN: 3,     // 자석 아이템 최소 스폰 간격 (패턴1 구름 기준)
   MAGNET_ITEM_SPAWN_MAX: 7,     // 자석 아이템 최대 스폰 간격
   MAGNET_ITEM_HOVER_Y: 90,      // 구름 상단에서 아이템 띄우는 높이 (px)
+  // 인게임 얼음 아이템 / 구름 동결 효과
+  ICE_FREEZE_DURATION_SEC: 10,  // 구름 동결 지속 시간 (초)
+  ICE_ITEM_SPAWN_MIN: 4,        // 얼음 아이템 최소 스폰 간격 (패턴1 구름 기준)
+  ICE_ITEM_SPAWN_MAX: 9,        // 얼음 아이템 최대 스폰 간격
+  ICE_ITEM_HOVER_Y: 88,         // 구름 상단에서 아이템 띄우는 높이 (px)
 } as const;
 
 // 동적 구름 스폰 / 디스폰 설정

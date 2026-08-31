@@ -63,6 +63,9 @@ export class SpawnSystem {
   updateVortexPositions(delta: number): void {
     const dt = delta / 1000;
     for (const group of this.vortexGroups) {
+      // 그룹 내 구름이 동결 상태이면 각도 진행 및 위치 갱신 모두 스킵
+      if (group.clouds.some((c) => c.isFrozen && !c.isFalling)) continue;
+
       group.angle += group.speed * group.direction * dt;
       for (const cloud of group.clouds) {
         if (cloud.isFalling) continue;

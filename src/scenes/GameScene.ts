@@ -11,6 +11,8 @@ import { StarItemSystem } from '@systems/StarItemSystem';
 import { MagnetItemSystem } from '@systems/MagnetItemSystem';
 import { ShieldSystem } from '@systems/ShieldSystem';
 import { MagnetSystem } from '@systems/MagnetSystem';
+import { IceItemSystem } from '@systems/IceItemSystem';
+import { CloudFreezeSystem } from '@systems/CloudFreezeSystem';
 import { AudioManager } from '@managers/AudioManager';
 import { InputManager } from '@managers/InputManager';
 import { SaveManager } from '@managers/SaveManager';
@@ -50,6 +52,8 @@ export class GameScene extends Phaser.Scene {
   private magnetItemSystem!: MagnetItemSystem;
   private shieldSystem!: ShieldSystem;
   private magnetSystem!: MagnetSystem;
+  private iceItemSystem!: IceItemSystem;
+  private cloudFreezeSystem!: CloudFreezeSystem;
 
   // 매니저 / UI
   private audioManager!: AudioManager;
@@ -140,6 +144,8 @@ export class GameScene extends Phaser.Scene {
     this.magnetItemSystem = new MagnetItemSystem(this);
     this.shieldSystem = new ShieldSystem(this);
     this.magnetSystem = new MagnetSystem(this);
+    this.iceItemSystem = new IceItemSystem(this);
+    this.cloudFreezeSystem = new CloudFreezeSystem(this);
     this.topHud = new TopHud(
       this,
       this.saveManager.getCoins(),
@@ -188,9 +194,10 @@ export class GameScene extends Phaser.Scene {
     this.spawnSystem.updateVortexPositions(delta);
     this.directionWheel.update(delta);
 
-    // 2. 별 아이템 / 자석 아이템 / 방어막 / 자석 시스템 업데이트
+    // 2. 별 아이템 / 자석 아이템 / 방어막 / 자석 / 얼음 시스템 업데이트
     this.starItemSystem.update(delta, scrollY);
     this.magnetItemSystem.update(delta, scrollY);
+    this.iceItemSystem.update(delta, scrollY);
     this.shieldSystem.update(delta, this.player.x, this.player.y);
     const wasActive = this.magnetSystem.isActive;
     this.magnetSystem.update(delta, this.player.x, this.player.y, this.clouds);
@@ -198,6 +205,14 @@ export class GameScene extends Phaser.Scene {
       this.scoreHud.updateMagnetTimer(this.magnetSystem.timer);
     } else if (wasActive) {
       this.scoreHud.hideMagnetTimer();
+    }
+    const wasFreezeActive = this.cloudFreezeSystem.isActive;
+    this.cloudFreezeSystem.update(delta, this.clouds);
+    if (this.cloudFreezeSystem.isActive) {
+      this.scoreHud.updateFreezeTimer(this.cloudFreezeSystem.timer);
+    } else if (wasFreezeActive) {
+      this.scoreHud.hideFreezeTimer();
+      this.obstacleSystem.unfreeze();
     }
 
     // ── 로켓 모드 분기 ──────────────────────────────────────
@@ -290,10 +305,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createClouds(): void {
-    for (const cfg of INITIAL_CLOUD_LAYOUT) {
+    for (let i = 0; i < INITIAL_CLOUD_LAYOUT.length; i++) {
+      const cfg = INITIAL_CLOUD_LAYOUT[i]!;
       const cloud = new CloudIsland(this, cfg);
       this.clouds.push(cloud);
       this.movementSystem.register(cloud);
+      // 시작 구름(i=0)은 제외하고 초기 구름도 얼음 아이템 카운터에 포함
+      // → nextSpawnAt=3이면 c3(시작 기준 3번째 위 구름)에 얼음 아이템 등장
+      if (i > 0) {
+        this.iceItemSystem.onPattern1CloudSpawned(cloud, null, null);
+      }
     }
 
     const topCloud = INITIAL_CLOUD_LAYOUT[INITIAL_CLOUD_LAYOUT.length - 1]!;
@@ -312,11 +333,16 @@ export class GameScene extends Phaser.Scene {
         this.clouds.push(cloud);
         this.movementSystem.register(cloud);
       }
-      // 패턴1 구름(단독 스폰)만 별·자석 후보로 등록
+      // 패턴1 구름(단독 스폰)만 별·자석·얼음 후보로 등록
       if (batch.length === 1) {
         const cloud = batch[0]!;
         this.starItemSystem.onPattern1CloudSpawned(cloud);
         this.magnetItemSystem.onPattern1CloudSpawned(cloud, this.starItemSystem.attachedCloudId);
+        this.iceItemSystem.onPattern1CloudSpawned(
+          cloud,
+          this.starItemSystem.attachedCloudId,
+          this.magnetItemSystem.attachedCloudId,
+        );
       }
     }
   }
@@ -665,12 +691,19 @@ export class GameScene extends Phaser.Scene {
       for (const cloud of batch) {
         this.clouds.push(cloud);
         this.movementSystem.register(cloud);
+        // 동결 효과 발동 중이면 새로 스폰되는 모든 구름 즉시 동결
+        this.cloudFreezeSystem.onCloudSpawned(cloud);
       }
-      // 패턴1 구름(단독 스폰)만 별·자석 후보로 등록
+      // 패턴1 구름(단독 스폰)만 별·자석·얼음 아이템 후보로 등록
       if (batch.length === 1) {
         const cloud = batch[0]!;
         this.starItemSystem.onPattern1CloudSpawned(cloud);
         this.magnetItemSystem.onPattern1CloudSpawned(cloud, this.starItemSystem.attachedCloudId);
+        this.iceItemSystem.onPattern1CloudSpawned(
+          cloud,
+          this.starItemSystem.attachedCloudId,
+          this.magnetItemSystem.attachedCloudId,
+        );
       }
       spawnsThisFrame++;
     }
@@ -681,6 +714,7 @@ export class GameScene extends Phaser.Scene {
     for (const cloud of removed) {
       this.starItemSystem.onCloudRemoved(cloud);
       this.magnetItemSystem.onCloudRemoved(cloud);
+      this.iceItemSystem.onCloudRemoved(cloud);
       this.movementSystem.unregister(cloud);
       cloud.destroy();
     }
@@ -969,6 +1003,13 @@ export class GameScene extends Phaser.Scene {
     if (this.magnetItemSystem.checkLanding(cloud)) {
       this.magnetSystem.activate();
       this.scoreHud.showMagnetTimer(this.magnetSystem.timer);
+    }
+
+    // 얼음 아이템 수집 — 구름 동결 + 장애물 홀딩 효과 활성화
+    if (this.iceItemSystem.checkLanding(cloud)) {
+      this.cloudFreezeSystem.activate(this.clouds);
+      this.obstacleSystem.freeze();
+      this.scoreHud.showFreezeTimer(this.cloudFreezeSystem.timer);
     }
 
     // 풍선 충돌 낙하 중 착지 → 게임 계속
@@ -1398,8 +1439,10 @@ export class GameScene extends Phaser.Scene {
     this.obstacleSystem?.clearAll();
     this.starItemSystem?.clearAll();
     this.magnetItemSystem?.clearAll();
+    this.iceItemSystem?.clearAll();
     this.shieldSystem?.clearAll();
     this.magnetSystem?.clearAll();
+    this.cloudFreezeSystem?.clearAll(this.clouds ?? []);
     this.clouds?.forEach((c) => c.destroy());
     this.clouds = [];
     this.player?.destroy();

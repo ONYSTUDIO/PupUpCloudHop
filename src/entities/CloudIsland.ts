@@ -18,6 +18,9 @@ export class CloudIsland {
   private _isFalling: boolean = false;
   private _fallVy: number = 0;
 
+  // 동결 상태 (얼음 아이템 효과)
+  private _isFrozen: boolean = false;
+
   readonly vortexAngleOffset: number;
 
   x: number = 0;
@@ -77,6 +80,7 @@ export class CloudIsland {
       return;
     }
     if (this._patternType === CloudPatternType.PATTERN_2) return;
+    if (this._isFrozen) return;
 
     this._currentAngle +=
       this._config.orbitSpeed * this._config.rotationDirection * (delta / 1000);
@@ -87,11 +91,15 @@ export class CloudIsland {
   }
 
   get isFalling(): boolean { return this._isFalling; }
+  get isFrozen(): boolean  { return this._isFrozen; }
 
   startFalling(): void {
     this._isFalling = true;
     this._fallVy = 0;
   }
+
+  freeze(): void   { this._isFrozen = true; }
+  unfreeze(): void { this._isFrozen = false; }
 
   setWorldXY(x: number, y: number): void {
     this.x = x;

@@ -14,6 +14,9 @@ export class ObstacleSystem {
   private storm: LightningStorm | null = null;
   private nextStormTime: number;
 
+  // ── 동결 상태 (얼음 아이템 효과) ────────────────────────
+  private _isFrozen: boolean = false;
+
   /**
    * @param now - 씬 생성 시점의 this.time.now
    *   Phaser 시각은 게임 전체 누적이므로 절대값(DELAY_MS)으로 비교하면
@@ -24,9 +27,20 @@ export class ObstacleSystem {
     this.nextStormTime = now + OBSTACLE_CONFIG.STORM_FIRST_SPAWN_DELAY_MS;
   }
 
+  freeze(): void   { this._isFrozen = true; }
+  unfreeze(): void { this._isFrozen = false; }
+
   // ── 새떼 업데이트 ────────────────────────────────────────
 
   update(delta: number, now: number, cameraScrollY: number): void {
+    if (this._isFrozen) {
+      // 스폰 타이머를 동결 시간만큼 밀어 해제 후 즉시 스폰 방지
+      this.nextFlockTime += delta;
+      // 현재 위치에서 렌더링만 유지 (delta=0으로 위치·날갯짓 정지)
+      for (const flock of this.flocks) flock.update(0);
+      return;
+    }
+
     if (now >= this.nextFlockTime) {
       this.spawnBirdFlock(cameraScrollY);
       this.nextFlockTime = now + Phaser.Math.Between(
@@ -56,6 +70,14 @@ export class ObstacleSystem {
     cameraScrollY: number,
     currentCloud: CloudIsland | null,
   ): string | null {
+    if (this._isFrozen) {
+      // 스폰 타이머 밀기
+      this.nextStormTime += delta;
+      // 진행 중인 폭풍은 현재 단계에서 렌더링만 유지 (delta=0)
+      this.storm?.update(0, cameraScrollY);
+      return null;
+    }
+
     // 폭풍 없음 → 스폰 여부 확인
     if (this.storm === null) {
       if (now >= this.nextStormTime) {

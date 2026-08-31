@@ -21,6 +21,10 @@ const ROCKET_BAR_Y  = ROCKET_TEXT_Y + 62;
 const MAGNET_TEXT_Y = ROCKET_BAR_Y + 52;
 const MAGNET_BAR_Y  = MAGNET_TEXT_Y + 54;
 
+// 구름 동결 타이머 (자석 타이머 아래)
+const FREEZE_TEXT_Y = MAGNET_BAR_Y + 52;
+const FREEZE_BAR_Y  = FREEZE_TEXT_Y + 54;
+
 const CX = BASE_WIDTH / 2; // 540
 
 export class ScoreHud {
@@ -37,6 +41,10 @@ export class ScoreHud {
   // 자석 타이머
   private magnetTimerBg: Phaser.GameObjects.Graphics | null = null;
   private magnetTimerText: Phaser.GameObjects.Text | null = null;
+
+  // 구름 동결 타이머
+  private freezeTimerBg: Phaser.GameObjects.Graphics | null = null;
+  private freezeTimerText: Phaser.GameObjects.Text | null = null;
 
   constructor(scene: Phaser.Scene, bestScore: number) {
     this.scene = scene;
@@ -145,6 +153,49 @@ export class ScoreHud {
     this.magnetTimerText?.setVisible(false);
   }
 
+  // ─── 구름 동결 타이머 ────────────────────────────────────────
+
+  showFreezeTimer(seconds: number): void {
+    if (!this.freezeTimerBg) {
+      this.freezeTimerBg = this.scene.add.graphics()
+        .setScrollFactor(0).setDepth(DEPTH.HUD);
+    }
+    if (!this.freezeTimerText) {
+      this.freezeTimerText = this.scene.add
+        .text(CX, FREEZE_TEXT_Y, '', {
+          fontSize: '48px', fontStyle: 'bold',
+          color: '#aaddff', stroke: '#002244', strokeThickness: 6,
+        })
+        .setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.HUD);
+    }
+    this.updateFreezeTimer(seconds);
+    this.freezeTimerBg.setVisible(true);
+    this.freezeTimerText.setVisible(true);
+  }
+
+  updateFreezeTimer(seconds: number): void {
+    const s = Math.max(0, seconds);
+    this.freezeTimerText?.setText(`🧊  ${s.toFixed(1)}`);
+
+    const bg = this.freezeTimerBg;
+    if (!bg) return;
+    bg.clear();
+    const barW  = 260;
+    const barH  = 12;
+    const ratio = s / 10; // ICE_FREEZE_DURATION_SEC = 10
+    bg.fillStyle(0x000000, 0.35);
+    bg.fillRoundedRect(CX - barW / 2 - 4, FREEZE_BAR_Y - 4, barW + 8, barH + 8, 7);
+    bg.fillStyle(0x66aaff, 0.88);
+    bg.fillRoundedRect(CX - barW / 2, FREEZE_BAR_Y, barW * ratio, barH, 5);
+    bg.fillStyle(0x555555, 0.4);
+    bg.fillRoundedRect(CX - barW / 2 + barW * ratio, FREEZE_BAR_Y, barW * (1 - ratio), barH, 5);
+  }
+
+  hideFreezeTimer(): void {
+    this.freezeTimerBg?.setVisible(false);
+    this.freezeTimerText?.setVisible(false);
+  }
+
   // ─── destroy ────────────────────────────────────────────────
 
   destroy(): void {
@@ -155,6 +206,8 @@ export class ScoreHud {
     this.rocketTimerText?.destroy();
     this.magnetTimerBg?.destroy();
     this.magnetTimerText?.destroy();
+    this.freezeTimerBg?.destroy();
+    this.freezeTimerText?.destroy();
   }
 
   // ─── private ────────────────────────────────────────────────
