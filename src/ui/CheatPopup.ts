@@ -24,7 +24,7 @@ export interface CheatSettings {
 const CX = BASE_WIDTH / 2;
 const CY = BASE_HEIGHT / 2;
 const PANEL_W = 780;
-const PANEL_H = 880;
+const PANEL_H = 960;
 
 export class CheatPopup {
   private objs: Phaser.GameObjects.GameObject[] = [];
@@ -43,6 +43,7 @@ export class CheatPopup {
     initial: CheatSettings,
     onClose: (s: CheatSettings) => void,
     onResetMissions: () => void,
+    onAddRevivalItem: () => void,
   ) {
     this.pattern = initial.pattern;
     this.shield = initial.startWithShield;
@@ -165,9 +166,32 @@ export class CheatPopup {
       });
     this.reg(resetBtn);
 
+    // ── 부활 아이템 지급 ─────────────────────────────────────
+    this.reg(
+      scene.add.text(CX - 80, CY + 390, '부활 아이템', {
+        fontSize: '46px', color: '#ddbbff',
+      }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP),
+    );
+    const revivalBtn = scene.add.text(CX + 120, CY + 390, '지급 (+1)', {
+      fontSize: '44px', fontStyle: 'bold', color: '#ffffff',
+      backgroundColor: '#553388', padding: { x: 32, y: 14 },
+      fixedWidth: 200, align: 'center',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.POPUP)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerover', function (this: Phaser.GameObjects.Text) { this.setAlpha(0.85); })
+      .on('pointerout',  function (this: Phaser.GameObjects.Text) { this.setAlpha(1); })
+      .on('pointerdown', () => {
+        onAddRevivalItem();
+        revivalBtn.setText('완료!');
+        scene.time.delayedCall(1200, () => {
+          if (!this.destroyed) revivalBtn.setText('지급 (+1)');
+        });
+      });
+    this.reg(revivalBtn);
+
     // ── 닫기 버튼 ────────────────────────────────────────────
     this.reg(
-      scene.add.text(CX, CY + 410, '닫기', {
+      scene.add.text(CX, CY + 460, '닫기', {
         fontSize: '56px', fontStyle: 'bold', color: '#ffffff',
         backgroundColor: '#2a5a80', padding: { x: 80, y: 22 },
       }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.POPUP)

@@ -22,6 +22,7 @@ import { authService } from '../services/AuthService';
 import { TopHud } from '@ui/TopHud';
 import { ScoreHud } from '@ui/ScoreHud';
 import { PausePopup } from '@ui/PausePopup';
+import { RevivePopup } from '@ui/RevivePopup';
 import { DirectionWheel } from '@ui/DirectionWheel';
 import { ActionPanel } from '@ui/ActionPanel';
 import { MetaIconPanel } from '@ui/MetaIconPanel';
@@ -66,6 +67,7 @@ export class GameScene extends Phaser.Scene {
   private topHud!: TopHud;
   private scoreHud!: ScoreHud;
   private pausePopup: PausePopup | null = null;
+  private revivePopup: RevivePopup | null = null;
   private directionWheel!: DirectionWheel;
   private actionPanel!: ActionPanel;
   private leftMetaPanel!: MetaIconPanel;
@@ -95,6 +97,9 @@ export class GameScene extends Phaser.Scene {
   private _parabolicJump: boolean = false;    // 패턴 1 비행 중 중력
   private capturedAngle: number = -Math.PI / 2; // 패턴 3 전용: 버튼 누른 순간 각도
 
+  // 부활 (1게임 1회)
+  private hasRevived: boolean = false;
+
   // 로켓 모드
   private isRocketMode: boolean = false;
   private rocketTimer: number = 0;
@@ -118,6 +123,7 @@ export class GameScene extends Phaser.Scene {
     this.jumpPattern = data?.pattern ?? JumpPatternType.PATTERN_3;
     this.isGameOver = false;
     this.isPaused = false;
+    this.hasRevived = false;
     this._physicsGravity = false;
     this._parabolicJump = false;
     this.isRocketMode = false;
@@ -1194,22 +1200,131 @@ export class GameScene extends Phaser.Scene {
     this.inputManager.disable();
     this.audioManager.stopBgm();
 
-    const score = this.scoreSystem.getScore();
-    const isNewBest = this.saveManager.submitScore(score.current, score.jumps);
+    const isDragPattern = this.jumpPattern === JumpPatternType.PATTERN_1 ||
+                          this.jumpPattern === JumpPatternType.PATTERN_2;
+    if (isDragPattern) this.directionWheel.disable();
+
+    this.events.emit(EVENTS.GAME_OVER);
+
+    // 첫 사망: 부활 팝업 / 이미 부활 사용: 바로 결과 화면
+    const popupDelay = Math.max(delay, 800);
+    if (!this.hasRevived) {
+      this.time.delayedCall(popupDelay, () => {
+        if (this.scene.isActive(SCENE_KEYS.GAME)) this.showRevivePopup();
+      });
+    } else {
+      this.time.delayedCall(delay, () => {
+        this.finalizeGameOver();
+      });
+    }
+  }
+
+  private showRevivePopup(): void {
+    const revivalItems = this.saveManager.getRevivalItems();
+    const diamonds     = this.saveManager.getDiamonds();
+    const score        = this.scoreSystem.getScore().current;
+
+    this.revivePopup = new RevivePopup(
+      this,
+      score,
+      revivalItems,
+      diamonds,
+      () => {
+        // 부활하기: 아이템 우선 소비, 없으면 다이아
+        if (this.saveManager.getRevivalItems() > 0) {
+          this.saveManager.useRevivalItem();
+        } else {
+          this.saveManager.spendDiamonds(ITEM_CONFIG.REVIVE_DIAMOND_COST);
+        }
+        this.revivePopup?.destroy();
+        this.revivePopup = null;
+        this.executeRevive();
+      },
+      () => {
+        // 포기하기
+        this.revivePopup?.destroy();
+        this.revivePopup = null;
+        this.finalizeGameOver();
+      },
+    );
+  }
+
+  private executeRevive(): void {
+    this.hasRevived    = true;
+    this.isGameOver    = false;
+    this.player.isDead = false;
+    this._physicsGravity = false;
+    this._parabolicJump  = false;
+    this.isMagnetPulling  = false;
+    this.magnetPullTarget = null;
+
+    // 가장 가까운 정상 구름 위로 스냅
+    const reviveCloud = this.findRevivalCloud();
+    if (reviveCloud) {
+      this.player.x = reviveCloud.x;
+      this.player.y = reviveCloud.topY - this.getPlayerHalfH();
+      this.currentCloudId   = reviveCloud.id;
+      this.jumpedFromId     = '';
+      this.landingOffsetX   = 0;
+      this.player.isOnGround = true;
+      this.player.vx = 0;
+      this.player.vy = 0;
+    }
+
+    // 방어막 지급
+    if (!this.shieldSystem.isActive) this.shieldSystem.activate();
+
+    // 방향 휠 복원
+    this.showDirectionArrow = true;
+    const isDragPattern = this.jumpPattern === JumpPatternType.PATTERN_1 ||
+                          this.jumpPattern === JumpPatternType.PATTERN_2;
+    if (isDragPattern) {
+      this.directionWheel.resetAngle();
+      this.directionWheel.enable();
+    } else {
+      this.directionWheel.resume();
+    }
+
+    // 입력 재활성화 (착지 연출 뒤)
+    this.time.delayedCall(300, () => {
+      if (!this.isGameOver) this.inputManager.enable();
+    });
+  }
+
+  /** 화면 내 추락하지 않은 구름 중 화면 하단 60% 지점에서 가장 가까운 것 반환 */
+  private findRevivalCloud(): CloudIsland | null {
+    const scrollY = this.cameras.main.scrollY;
+
+    const visible = this.clouds.filter(
+      (c) => !c.isFalling &&
+              c.topY >= scrollY - 100 &&
+              c.topY <= scrollY + BASE_HEIGHT + 100,
+    );
+    const candidates = visible.length > 0
+      ? visible
+      : this.clouds.filter((c) => !c.isFalling);
+
+    if (candidates.length === 0) return null;
+
+    const targetY = scrollY + BASE_HEIGHT * 0.6;
+    return candidates.reduce((best, c) =>
+      Math.abs(c.topY - targetY) < Math.abs(best.topY - targetY) ? c : best,
+    );
+  }
+
+  private finalizeGameOver(): void {
+    const score      = this.scoreSystem.getScore();
+    const isNewBest  = this.saveManager.submitScore(score.current, score.jumps);
     const coinsEarned = score.current * GAMEPLAY.COIN_PER_SCORE;
     this.saveManager.addCoins(coinsEarned);
     const totalCoins = this.saveManager.getCoins();
 
-    this.events.emit(EVENTS.GAME_OVER);
-
-    this.time.delayedCall(delay, () => {
-      this.scene.start(SCENE_KEYS.RESULT, {
-        score: { ...score },
-        isNewBest,
-        pattern: this.jumpPattern,
-        coinsEarned,
-        totalCoins,
-      });
+    this.scene.start(SCENE_KEYS.RESULT, {
+      score: { ...score },
+      isNewBest,
+      pattern: this.jumpPattern,
+      coinsEarned,
+      totalCoins,
     });
   }
 
@@ -1492,6 +1607,8 @@ export class GameScene extends Phaser.Scene {
     this.scoreHud?.destroy();
     this.pausePopup?.destroy();
     this.pausePopup = null;
+    this.revivePopup?.destroy();
+    this.revivePopup = null;
     this.actionPanel?.destroy();
     this.leftMetaPanel?.destroy();
     this.rightMetaPanel?.destroy();

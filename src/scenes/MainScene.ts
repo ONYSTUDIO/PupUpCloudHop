@@ -382,6 +382,9 @@ export class MainScene extends Phaser.Scene {
           console.warn('[MissionService] reset failed', e);
         });
       },
+      () => {
+        this.saveManager.addRevivalItem(1);
+      },
     );
   }
 

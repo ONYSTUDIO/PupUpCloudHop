@@ -44,6 +44,7 @@ const DEFAULT_SAVE: SaveData = {
   roulettePaidSpinsToday: 0,
   shieldItems: 0,
   magnetItems: 0,
+  revivalItems: 0,
   claimedMissions: [],
 };
 
@@ -146,8 +147,9 @@ export class SaveManager {
 
   // ─── 아이템 수량 ──────────────────────────────────────────────
 
-  getShieldItems(): number { return this.data.shieldItems ?? 0; }
-  getMagnetItems(): number { return this.data.magnetItems ?? 0; }
+  getShieldItems(): number  { return this.data.shieldItems ?? 0; }
+  getMagnetItems(): number  { return this.data.magnetItems ?? 0; }
+  getRevivalItems(): number { return this.data.revivalItems ?? 0; }
 
   addShieldItem(count = 1): void {
     this.data.shieldItems = (this.data.shieldItems ?? 0) + count;
@@ -157,6 +159,19 @@ export class SaveManager {
   addMagnetItem(count = 1): void {
     this.data.magnetItems = (this.data.magnetItems ?? 0) + count;
     this.persist();
+  }
+
+  addRevivalItem(count = 1): void {
+    this.data.revivalItems = (this.data.revivalItems ?? 0) + count;
+    this.persist();
+  }
+
+  /** 부활 아이템 1개 소비. 잔량 부족 시 false 반환. */
+  useRevivalItem(): boolean {
+    if ((this.data.revivalItems ?? 0) <= 0) return false;
+    this.data.revivalItems -= 1;
+    this.persist();
+    return true;
   }
 
   // ─────────────────────────────────────────────────────────────
