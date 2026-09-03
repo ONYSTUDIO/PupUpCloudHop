@@ -46,6 +46,9 @@ const DEFAULT_SAVE: SaveData = {
   magnetItems: 0,
   revivalItems: 0,
   claimedMissions: [],
+  lastAttendanceDate: '',
+  attendanceStreak: 0,
+  attendanceDayClaimed: [false, false, false, false, false, false, false],
 };
 
 export class SaveManager {
@@ -95,6 +98,12 @@ export class SaveManager {
 
   private todayString(): string {
     const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  private yesterdayString(): string {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
@@ -239,6 +248,92 @@ export class SaveManager {
     this.addCoins(mission.coinReward);
     return mission.coinReward;
   }
+
+  // ─── 출석 체크 ────────────────────────────────────────────
+
+  getAttendanceDayClaimed(): boolean[] {
+    const arr = this.data.attendanceDayClaimed;
+    if (!Array.isArray(arr) || arr.length !== 7) {
+      return [false, false, false, false, false, false, false];
+    }
+    return [...arr];
+  }
+
+  /**
+   * 오늘 새로운 출석일인지 확인.
+   * isNewDay=true → 팝업 표시 (미수령), false → 이미 수령 완료.
+   * dayIndex: 0~6, 오늘 해당하는 보상 칸 (0-based).
+   */
+  checkAttendance(): { isNewDay: boolean; dayIndex: number } {
+    const today = this.todayString();
+    if (this.data.lastAttendanceDate === today) {
+      return { isNewDay: false, dayIndex: Math.max(0, this.data.attendanceStreak - 1) };
+    }
+    const yesterday = this.yesterdayString();
+    if (this.data.lastAttendanceDate === yesterday && this.data.attendanceStreak > 0) {
+      let next = this.data.attendanceStreak + 1;
+      if (next > 7) next = 1;
+      return { isNewDay: true, dayIndex: next - 1 };
+    }
+    return { isNewDay: true, dayIndex: 0 };
+  }
+
+  /** 오늘 출석 보상 지급 및 상태 갱신. 이미 수령했으면 무시. */
+  claimAttendance(): void {
+    const today = this.todayString();
+    if (this.data.lastAttendanceDate === today) return;
+
+    const yesterday = this.yesterdayString();
+    let newStreak: number;
+    let resetCycle = false;
+
+    if (this.data.lastAttendanceDate === yesterday && this.data.attendanceStreak > 0) {
+      newStreak = this.data.attendanceStreak + 1;
+      if (newStreak > 7) {
+        newStreak = 1;
+        resetCycle = true;
+      }
+    } else {
+      newStreak = 1;
+      resetCycle = true;
+    }
+
+    if (resetCycle) {
+      this.data.attendanceDayClaimed = [false, false, false, false, false, false, false];
+    }
+
+    const dayIndex = newStreak - 1;
+    const REWARDS = [
+      { coins: 30 },
+      { coins: 50 },
+      { shield: 1 },
+      { coins: 80 },
+      { revival: 1 },
+      { coins: 100 },
+      { diamonds: 3 },
+    ] as const;
+
+    const r = REWARDS[dayIndex]!;
+    if ('coins'    in r) this.addCoins(r.coins);
+    if ('shield'   in r) this.addShieldItem(r.shield);
+    if ('revival'  in r) this.addRevivalItem(r.revival);
+    if ('diamonds' in r) this.addDiamonds(r.diamonds);
+
+    this.data.attendanceStreak = newStreak;
+    this.data.attendanceDayClaimed[dayIndex] = true;
+    this.data.lastAttendanceDate = today;
+    this.persist();
+  }
+
+  /** [테스트용] 출석 상태를 초기화해 다시 팝업이 뜨도록 한다. */
+  resetAttendanceState(): void {
+    this.data.lastAttendanceDate = '';
+    this.data.attendanceStreak = 0;
+    this.data.attendanceDayClaimed = [false, false, false, false, false, false, false];
+    this.persist();
+  }
+
+  // ──────────────────────────────────────────────────────────
 
   /** [테스트용] 수령 완료 미션을 모두 초기화해 다시 수령 가능 상태로 되돌린다. */
   resetClaimedMissions(): void {

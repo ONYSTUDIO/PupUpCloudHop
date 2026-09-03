@@ -44,13 +44,12 @@
 #### ~~콤보 시스템~~ — ❌ 폐기
 > 진자 조작(방향 휠)과 인지 부하 이중화 문제로 폐기. 아래 두 항목으로 대체.
 
-#### 멀티 점프 연출 / 인-런 마일스톤 (마이크로 루프 대체)
-- [ ] `ScoreSystem.onLand()`에서 높이 이득이 `HEIGHT_UNIT × 2` 이상일 때 BIG JUMP 이벤트 트리거
-- [ ] BIG JUMP 연출 — "BIG JUMP!" / "AMAZING!" 텍스트 팡파레 + 코인 파티클 + 효과음 변화
-- [ ] BIG JUMP 코인 보너스 지급 (2층 스킵 +2코인 / 3층 스킵 +4코인)
-- [ ] `ScoreSystem`에 `landingCount` 임계값 체크 로직 추가 (10 / 25 / 50 / 100회)
-- [ ] 임계값 달성 시 자동 코인 지급 + 팡파레 연출
-- [ ] `ResultPanel`에 "이번 판 마일스톤: N개 달성" 표시
+#### 멀티 점프 연출 / 인-런 마일스톤 (마이크로 루프 대체) — ✅ 구현 완료
+> ✅ `ScoreSystem.onLand()` — 높이 이득 ≥ HEIGHT_UNIT×2 시 BIG_JUMP 이벤트 트리거
+> ✅ "BIG JUMP!" / "AMAZING!" 텍스트 팡파레 + 코인 파티클 + 효과음 변화
+> ✅ BIG JUMP 코인 보너스 지급 (2층 스킵 +2코인 / 3층 스킵 +4코인)
+> ✅ `landingCount` 임계값 체크 (10 / 25 / 50 / 100회) + 자동 코인 지급 + 팡파레
+> ✅ `ResultPanel` — "이번 판 마일스톤: N개 달성" 표시
 
 #### 출석 체크 (매크로 루프)
 - [ ] `SaveManager`에 `lastAttendanceDate`, `attendanceStreak`, `attendanceDayClaimed[]` 필드 추가

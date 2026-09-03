@@ -8,6 +8,7 @@ import { TopHud } from '@ui/TopHud';
 import { MetaIconPanel } from '@ui/MetaIconPanel';
 import { CheatPopup, CheatSettings } from '@ui/CheatPopup';
 import { MissionPopup } from '@ui/MissionPopup';
+import { AttendancePopup } from '@ui/AttendancePopup';
 import { JumpPatternType } from '@game-types/game';
 import { UI_LAYOUT } from '@config/uiLayout';
 
@@ -15,6 +16,8 @@ export class MainScene extends Phaser.Scene {
   private saveManager!: SaveManager;
   private topHud!: TopHud;
   private rightMetaPanel!: MetaIconPanel;
+  private leftMetaPanel!: MetaIconPanel;
+  private attendanceBadge!: Phaser.GameObjects.Graphics;
   private cheatSettings: CheatSettings = {
     pattern: JumpPatternType.PATTERN_3,
     startWithShield: false,
@@ -22,6 +25,7 @@ export class MainScene extends Phaser.Scene {
   };
   private cheatPopup: CheatPopup | null = null;
   private missionPopup: MissionPopup | null = null;
+  private attendancePopup: AttendancePopup | null = null;
   private missionBadge!: Phaser.GameObjects.Graphics;
   private authUnsub: (() => void) | null = null;
 
@@ -56,6 +60,9 @@ export class MainScene extends Phaser.Scene {
 
     // 하단 버튼 2개
     this.addBottomButtons();
+
+    // 출석 체크 팝업 (날짜 바뀐 첫 진입 시)
+    this.checkAndShowAttendance();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
   }
@@ -105,6 +112,9 @@ export class MainScene extends Phaser.Scene {
     this.rightMetaPanel.addIcon(this.createShopIcon());
     this.rightMetaPanel.addIcon(this.createRouletteIcon());
     this.rightMetaPanel.addIcon(this.createMissionIcon());
+
+    this.leftMetaPanel = new MetaIconPanel(this, 'left');
+    this.leftMetaPanel.addIcon(this.createAttendanceIcon());
   }
 
   private createShopIcon(): Phaser.GameObjects.Container {
@@ -273,6 +283,103 @@ export class MainScene extends Phaser.Scene {
     const half = UI_LAYOUT.meta.iconSize / 2;
     this.missionBadge.fillStyle(0xee2222, 1);
     this.missionBadge.fillCircle(half - 10, -half + 10, 14);
+  }
+
+  // ─── 출석 아이콘 ──────────────────────────────────────────
+
+  private createAttendanceIcon(): Phaser.GameObjects.Container {
+    const size = UI_LAYOUT.meta.iconSize;
+    const half = size / 2;
+    const container = this.add.container(0, 0);
+    container.setSize(size, size).setInteractive({ useHandCursor: true });
+
+    // 배경
+    const bg = this.add.graphics();
+    bg.fillStyle(0xffffff, 0.88);
+    bg.fillRoundedRect(-half, -half, size, size, 20);
+    bg.lineStyle(3, 0xcc7700, 1);
+    bg.strokeRoundedRect(-half, -half, size, size, 20);
+
+    // 달력 그래픽
+    const cal = this.add.graphics();
+    const cW = 68; const cH = 60;
+    const cX = -cW / 2; const cY = -half + 12;
+
+    // 헤더 바 (주황)
+    cal.fillStyle(0xcc7700, 1);
+    cal.fillRoundedRect(cX, cY, cW, 18, { tl: 6, tr: 6, bl: 0, br: 0 });
+    // 바디
+    cal.fillStyle(0xf0f0f8, 1);
+    cal.fillRoundedRect(cX, cY + 18, cW, cH - 18, { tl: 0, tr: 0, bl: 6, br: 6 });
+    cal.lineStyle(1.5, 0xcc7700, 0.8);
+    cal.strokeRoundedRect(cX, cY, cW, cH, 6);
+    // 링 바인딩
+    cal.fillStyle(0x444444, 1);
+    cal.fillRoundedRect(cX + 14, cY - 5, 6, 12, 3);
+    cal.fillRoundedRect(cX + cW - 20, cY - 5, 6, 12, 3);
+    // 날짜 점 그리드 (3열 × 2행)
+    const dotX0 = cX + 11; const dotY0 = cY + 26;
+    const dxStep = 22; const dyStep = 17;
+    for (let row = 0; row < 2; row++) {
+      for (let col = 0; col < 3; col++) {
+        const dx = dotX0 + col * dxStep;
+        const dy = dotY0 + row * dyStep;
+        if (row === 0 && col === 1) {
+          cal.fillStyle(0xff9900, 1);
+          cal.fillCircle(dx, dy, 6);
+        } else {
+          cal.fillStyle(0x99aacc, 1);
+          cal.fillCircle(dx, dy, 4);
+        }
+      }
+    }
+
+    const label = this.add.text(0, half - 24, '출석', {
+      fontSize: '26px', color: '#cc7700', fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    // 미수령 배지
+    this.attendanceBadge = this.add.graphics();
+    this.refreshAttendanceBadge();
+
+    container.add([bg, cal, label, this.attendanceBadge]);
+    container.on('pointerdown', () => this.openAttendancePopup());
+
+    return container;
+  }
+
+  private refreshAttendanceBadge(): void {
+    this.attendanceBadge.clear();
+    if (!this.saveManager.checkAttendance().isNewDay) return;
+    const half = UI_LAYOUT.meta.iconSize / 2;
+    this.attendanceBadge.fillStyle(0xee2222, 1);
+    this.attendanceBadge.fillCircle(half - 10, -half + 10, 14);
+  }
+
+  // ─── 출석 체크 팝업 ───────────────────────────────────────
+
+  private checkAndShowAttendance(): void {
+    const { isNewDay } = this.saveManager.checkAttendance();
+    if (!isNewDay) return;
+    this.openAttendancePopup();
+  }
+
+  private openAttendancePopup(): void {
+    if (this.attendancePopup) return;
+    this.attendancePopup = new AttendancePopup(
+      this,
+      this.saveManager,
+      () => {
+        this.topHud.updateCurrency(
+          this.saveManager.getCoins(),
+          this.saveManager.getDiamonds(),
+        );
+        this.refreshAttendanceBadge();
+      },
+      () => {
+        this.attendancePopup = null;
+      },
+    );
   }
 
   private openMissionPopup(): void {
@@ -469,9 +576,12 @@ export class MainScene extends Phaser.Scene {
     this.authUnsub = null;
     this.topHud?.destroy();
     this.rightMetaPanel?.destroy();
+    this.leftMetaPanel?.destroy();
     this.cheatPopup?.destroy();
     this.cheatPopup = null;
     this.missionPopup?.destroy();
     this.missionPopup = null;
+    this.attendancePopup?.destroy();
+    this.attendancePopup = null;
   }
 }

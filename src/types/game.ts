@@ -55,6 +55,9 @@ export interface SaveData {
   magnetItems: number;            // 룰렛 등으로 획득한 자석 아이템 수량
   revivalItems: number;           // 획득한 부활 아이템 수량
   claimedMissions: string[];      // 수령 완료한 미션 ID 목록
+  lastAttendanceDate: string;     // 'YYYY-MM-DD' — 마지막 출석 보상 수령 날짜
+  attendanceStreak: number;       // 현재 연속 출석 일수 (1~7, 0=미시작)
+  attendanceDayClaimed: boolean[]; // 길이 7, 현재 주기 각 일자 수령 여부
 }
 
 export type SceneKey = 'BootScene' | 'PreloadScene' | 'TitleScene' | 'GameScene' | 'ResultScene' | 'ShopScene' | 'RouletteScene';
