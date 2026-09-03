@@ -42,9 +42,25 @@ export const GAMEPLAY = {
   // 코인 리워드 (점수 × 배율)
   COIN_PER_SCORE: 1,
 
+  // BIG JUMP 연출 — 높이 이득이 HEIGHT_UNIT 의 N배 이상일 때 발동
+  BIG_JUMP_LAYERS_2: 2,   // 'BIG JUMP!'  트리거 층 수
+  BIG_JUMP_LAYERS_3: 3,   // 'AMAZING!'   트리거 층 수
+  BIG_JUMP_COINS_2: 2,    // BIG JUMP! 코인 보너스
+  BIG_JUMP_COINS_3: 4,    // AMAZING!  코인 보너스
+
   // 구름섬 낙하 (번개 폭풍 명중 후)
   CLOUD_FALL_GRAVITY: 900,
 } as const;
+
+// 인-런 마일스톤: 착지 수 달성 시 코인 자동 지급 (한 판 1회)
+export const MILESTONES = [
+  { landings: 10,  coins: 10,  level: 'small'  as const },
+  { landings: 25,  coins: 25,  level: 'medium' as const },
+  { landings: 50,  coins: 60,  level: 'large'  as const },
+  { landings: 100, coins: 150, level: 'full'   as const },
+] as const;
+
+export type MilestoneLevel = (typeof MILESTONES)[number]['level'];
 
 export const ANIM = {
   PLAYER_IDLE_FRAME_RATE: 8,

@@ -54,6 +54,9 @@ export class ScoreHud {
   private slowTimerBg: Phaser.GameObjects.Graphics | null = null;
   private slowTimerText: Phaser.GameObjects.Text | null = null;
 
+  // 마일스톤 코인 주머니 (점수 오른쪽에 나열)
+  private bagIcons: Phaser.GameObjects.Container[] = [];
+
   constructor(scene: Phaser.Scene, bestScore: number) {
     this.scene = scene;
 
@@ -247,6 +250,62 @@ export class ScoreHud {
     this.slowTimerText?.setVisible(false);
   }
 
+  // ─── 마일스톤 코인 주머니 ──────────────────────────────────
+
+  /** 마일스톤 달성 시 점수 오른쪽에 주머니 아이콘 1개 추가 */
+  addCoinBag(): void {
+    const idx = this.bagIcons.length;
+    // 점수 텍스트(CX=540) 오른쪽에 46px 간격으로 수평 나열
+    const bagX = CX + 290 + idx * 46;
+    const bagY = SCORE_Y + 54;  // 점수 텍스트 수직 중앙
+
+    const bag = this.makeBagIcon(18);
+    bag.setPosition(bagX, bagY)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.HUD)
+      .setAlpha(0)
+      .setScale(0.3);
+
+    this.bagIcons.push(bag);
+
+    this.scene.tweens.add({
+      targets: bag,
+      alpha: 1, scaleX: 1, scaleY: 1,
+      duration: 340, ease: 'Back.easeOut',
+    });
+  }
+
+  /** 코인 주머니 그래픽 생성 (r = 몸통 반지름) */
+  private makeBagIcon(r: number): Phaser.GameObjects.Container {
+    const g = this.scene.add.graphics();
+
+    // 몸통 그림자
+    g.fillStyle(0xBB8800, 1);
+    g.fillCircle(0, r * 0.55 + 2, r);
+
+    // 몸통
+    g.fillStyle(0xFFD700, 1);
+    g.fillCircle(0, r * 0.55, r);
+
+    // 하이라이트
+    g.fillStyle(0xFFFAA0, 0.55);
+    g.fillCircle(-r * 0.28, r * 0.15, r * 0.42);
+
+    // 목 부분
+    g.fillStyle(0xFFD700, 1);
+    g.fillRoundedRect(-r * 0.36, -r * 0.52, r * 0.72, r * 0.65, 3);
+
+    // 매듭
+    g.fillStyle(0xBB7700, 1);
+    g.fillCircle(0, -r * 0.52, r * 0.36);
+
+    // 매듭 하이라이트
+    g.fillStyle(0xFFCC44, 0.7);
+    g.fillCircle(-r * 0.1, -r * 0.60, r * 0.18);
+
+    return this.scene.add.container(0, 0, [g]);
+  }
+
   // ─── destroy ────────────────────────────────────────────────
 
   destroy(): void {
@@ -261,6 +320,8 @@ export class ScoreHud {
     this.freezeTimerText?.destroy();
     this.slowTimerBg?.destroy();
     this.slowTimerText?.destroy();
+    this.bagIcons.forEach((b) => b.destroy());
+    this.bagIcons = [];
   }
 
   // ─── private ────────────────────────────────────────────────

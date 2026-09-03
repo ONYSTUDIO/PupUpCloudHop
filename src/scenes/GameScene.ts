@@ -22,7 +22,6 @@ import { authService } from '../services/AuthService';
 import { TopHud } from '@ui/TopHud';
 import { ScoreHud } from '@ui/ScoreHud';
 import { PausePopup } from '@ui/PausePopup';
-import { RevivePopup } from '@ui/RevivePopup';
 import { DirectionWheel } from '@ui/DirectionWheel';
 import { ActionPanel } from '@ui/ActionPanel';
 import { MetaIconPanel } from '@ui/MetaIconPanel';
@@ -67,7 +66,6 @@ export class GameScene extends Phaser.Scene {
   private topHud!: TopHud;
   private scoreHud!: ScoreHud;
   private pausePopup: PausePopup | null = null;
-  private revivePopup: RevivePopup | null = null;
   private directionWheel!: DirectionWheel;
   private actionPanel!: ActionPanel;
   private leftMetaPanel!: MetaIconPanel;
@@ -97,8 +95,10 @@ export class GameScene extends Phaser.Scene {
   private _parabolicJump: boolean = false;    // 패턴 1 비행 중 중력
   private capturedAngle: number = -Math.PI / 2; // 패턴 3 전용: 버튼 누른 순간 각도
 
-  // 부활 (1게임 1회)
-  private hasRevived: boolean = false;
+  // 인-런 보너스 코인 (BIG JUMP / 마일스톤) 누적
+  private bonusCoinsEarned: number = 0;
+  // 결과 화면 주머니 연출용: 획득 순서대로 코인 주머니 기록
+  private coinBags: { coins: number }[] = [];
 
   // 로켓 모드
   private isRocketMode: boolean = false;
@@ -123,7 +123,8 @@ export class GameScene extends Phaser.Scene {
     this.jumpPattern = data?.pattern ?? JumpPatternType.PATTERN_3;
     this.isGameOver = false;
     this.isPaused = false;
-    this.hasRevived = false;
+    this.bonusCoinsEarned = 0;
+    this.coinBags = [];
     this._physicsGravity = false;
     this._parabolicJump = false;
     this.isRocketMode = false;
@@ -149,6 +150,8 @@ export class GameScene extends Phaser.Scene {
     this.jumpSystem = new JumpSystem();
     this.collisionSystem = new CollisionSystem();
     this.scoreSystem = new ScoreSystem(this, this.saveManager.getBestScore());
+    this.events.on(EVENTS.BIG_JUMP, this.onBigJump, this);
+    this.events.on(EVENTS.MILESTONE, this.onMilestone, this);
     this.obstacleSystem = new ObstacleSystem(this, this.time.now);
     this.starItemSystem = new StarItemSystem(this);
     this.magnetItemSystem = new MagnetItemSystem(this);
@@ -1053,7 +1056,7 @@ export class GameScene extends Phaser.Scene {
     this.resetWheelOnLand();
 
     if (cloud.id !== prevId) {
-      this.scoreSystem.onLand(cloud.topY);
+      this.scoreSystem.onLand(cloud.topY, cloud.x);
     }
 
     // 별 착지 수집 — 해당 구름에 별이 있으면 로켓 모드 발동
@@ -1206,118 +1209,19 @@ export class GameScene extends Phaser.Scene {
 
     this.events.emit(EVENTS.GAME_OVER);
 
-    // 첫 사망: 부활 팝업 / 이미 부활 사용: 바로 결과 화면
-    const popupDelay = Math.max(delay, 800);
-    if (!this.hasRevived) {
-      this.time.delayedCall(popupDelay, () => {
-        if (this.scene.isActive(SCENE_KEYS.GAME)) this.showRevivePopup();
-      });
-    } else {
-      this.time.delayedCall(delay, () => {
-        this.finalizeGameOver();
-      });
-    }
-  }
-
-  private showRevivePopup(): void {
-    const revivalItems = this.saveManager.getRevivalItems();
-    const diamonds     = this.saveManager.getDiamonds();
-    const score        = this.scoreSystem.getScore().current;
-
-    this.revivePopup = new RevivePopup(
-      this,
-      score,
-      revivalItems,
-      diamonds,
-      () => {
-        // 부활하기: 아이템 우선 소비, 없으면 다이아
-        if (this.saveManager.getRevivalItems() > 0) {
-          this.saveManager.useRevivalItem();
-        } else {
-          this.saveManager.spendDiamonds(ITEM_CONFIG.REVIVE_DIAMOND_COST);
-        }
-        this.revivePopup?.destroy();
-        this.revivePopup = null;
-        this.executeRevive();
-      },
-      () => {
-        // 포기하기
-        this.revivePopup?.destroy();
-        this.revivePopup = null;
-        this.finalizeGameOver();
-      },
-    );
-  }
-
-  private executeRevive(): void {
-    this.hasRevived    = true;
-    this.isGameOver    = false;
-    this.player.isDead = false;
-    this._physicsGravity = false;
-    this._parabolicJump  = false;
-    this.isMagnetPulling  = false;
-    this.magnetPullTarget = null;
-
-    // 가장 가까운 정상 구름 위로 스냅
-    const reviveCloud = this.findRevivalCloud();
-    if (reviveCloud) {
-      this.player.x = reviveCloud.x;
-      this.player.y = reviveCloud.topY - this.getPlayerHalfH();
-      this.currentCloudId   = reviveCloud.id;
-      this.jumpedFromId     = '';
-      this.landingOffsetX   = 0;
-      this.player.isOnGround = true;
-      this.player.vx = 0;
-      this.player.vy = 0;
-    }
-
-    // 방어막 지급
-    if (!this.shieldSystem.isActive) this.shieldSystem.activate();
-
-    // 방향 휠 복원
-    this.showDirectionArrow = true;
-    const isDragPattern = this.jumpPattern === JumpPatternType.PATTERN_1 ||
-                          this.jumpPattern === JumpPatternType.PATTERN_2;
-    if (isDragPattern) {
-      this.directionWheel.resetAngle();
-      this.directionWheel.enable();
-    } else {
-      this.directionWheel.resume();
-    }
-
-    // 입력 재활성화 (착지 연출 뒤)
-    this.time.delayedCall(300, () => {
-      if (!this.isGameOver) this.inputManager.enable();
+    // 결과 화면으로 바로 이동 (부활 팝업 없이)
+    this.time.delayedCall(Math.max(delay, 800), () => {
+      if (this.scene.isActive(SCENE_KEYS.GAME)) this.finalizeGameOver();
     });
   }
 
-  /** 화면 내 추락하지 않은 구름 중 화면 하단 60% 지점에서 가장 가까운 것 반환 */
-  private findRevivalCloud(): CloudIsland | null {
-    const scrollY = this.cameras.main.scrollY;
-
-    const visible = this.clouds.filter(
-      (c) => !c.isFalling &&
-              c.topY >= scrollY - 100 &&
-              c.topY <= scrollY + BASE_HEIGHT + 100,
-    );
-    const candidates = visible.length > 0
-      ? visible
-      : this.clouds.filter((c) => !c.isFalling);
-
-    if (candidates.length === 0) return null;
-
-    const targetY = scrollY + BASE_HEIGHT * 0.6;
-    return candidates.reduce((best, c) =>
-      Math.abs(c.topY - targetY) < Math.abs(best.topY - targetY) ? c : best,
-    );
-  }
-
   private finalizeGameOver(): void {
-    const score      = this.scoreSystem.getScore();
-    const isNewBest  = this.saveManager.submitScore(score.current, score.jumps);
-    const coinsEarned = score.current * GAMEPLAY.COIN_PER_SCORE;
-    this.saveManager.addCoins(coinsEarned);
-    const totalCoins = this.saveManager.getCoins();
+    const score       = this.scoreSystem.getScore();
+    const isNewBest   = this.saveManager.submitScore(score.current, score.jumps);
+    const scoreCoin   = score.current * GAMEPLAY.COIN_PER_SCORE;
+    this.saveManager.addCoins(scoreCoin); // 보너스 코인은 이미 플레이 중 추가됨
+    const coinsEarned = scoreCoin + this.bonusCoinsEarned;
+    const totalCoins  = this.saveManager.getCoins();
 
     this.scene.start(SCENE_KEYS.RESULT, {
       score: { ...score },
@@ -1325,6 +1229,8 @@ export class GameScene extends Phaser.Scene {
       pattern: this.jumpPattern,
       coinsEarned,
       totalCoins,
+      milestoneCount: this.scoreSystem.getAchievedMilestoneCount(),
+      coinBags: [...this.coinBags],
     });
   }
 
@@ -1541,7 +1447,7 @@ export class GameScene extends Phaser.Scene {
 
       if (horzOverlap && vertPassed) {
         this.rocketPassedCloudIds.add(cloud.id);
-        this.scoreSystem.onLand(cloud.topY);
+        this.scoreSystem.onLand(cloud.topY, cloud.x);
       }
     }
   }
@@ -1596,9 +1502,138 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // ─── BIG JUMP / 마일스톤 이벤트 핸들러 ───────────────────
+
+  private onBigJump(payload: { text: string; coins: number; worldX: number; worldY: number }): void {
+    this.bonusCoinsEarned += payload.coins;
+    this.coinBags.push({ coins: payload.coins });
+    this.saveManager.addCoins(payload.coins);
+    this.showFloatingText(payload.worldX, payload.worldY, payload.text, payload.coins);
+    this.spawnCoinParticles(payload.worldX, payload.worldY, payload.text === 'AMAZING!' ? 10 : 6);
+  }
+
+  private onMilestone(payload: { landingCount: number; coins: number; level: string }): void {
+    this.bonusCoinsEarned += payload.coins;
+    this.coinBags.push({ coins: payload.coins });
+    this.saveManager.addCoins(payload.coins);
+    this.scoreHud.addCoinBag();
+    this.showMilestoneFanfare(payload.level, payload.coins);
+  }
+
+  /** 착지 지점 위에서 위로 떠오르며 사라지는 텍스트 연출 (world 좌표) */
+  private showFloatingText(worldX: number, worldY: number, text: string, coins: number): void {
+    const label = this.add.text(worldX, worldY - 30, text, {
+      fontSize: '58px', fontStyle: 'bold',
+      color: '#ffee00', stroke: '#774400', strokeThickness: 6,
+    }).setOrigin(0.5).setDepth(DEPTH.EFFECT);
+
+    const coinLabel = this.add.text(worldX, worldY + 38, `+${coins} coin`, {
+      fontSize: '38px', fontStyle: 'bold',
+      color: '#ffcc44', stroke: '#664400', strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(DEPTH.EFFECT);
+
+    this.tweens.add({
+      targets: [label, coinLabel],
+      y: `-=${160}`,
+      alpha: 0,
+      duration: 1300,
+      ease: 'Cubic.easeOut',
+      onComplete: () => { label.destroy(); coinLabel.destroy(); },
+    });
+  }
+
+  /** 코인 파티클 분출 (Graphics 도트 사용) */
+  private spawnCoinParticles(worldX: number, worldY: number, count: number): void {
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.6;
+      const speed = 90 + Math.random() * 130;
+      const dot = this.add.graphics().setDepth(DEPTH.EFFECT);
+      const r = 7 + Math.random() * 6;
+      dot.fillStyle(0xffcc00, 1);
+      dot.fillCircle(0, 0, r);
+      dot.setPosition(worldX, worldY);
+
+      this.tweens.add({
+        targets: dot,
+        x: worldX + Math.cos(angle) * speed,
+        y: worldY + Math.sin(angle) * speed - 60,
+        alpha: 0,
+        scaleX: 0.15,
+        scaleY: 0.15,
+        duration: 650 + Math.random() * 350,
+        ease: 'Cubic.easeOut',
+        onComplete: () => dot.destroy(),
+      });
+    }
+  }
+
+  /** HUD 위에 팡파레 텍스트 표시 (screen 고정) */
+  private showMilestoneFanfare(level: string, coins: number): void {
+    const cx = BASE_WIDTH / 2;
+    const cy = BASE_HEIGHT * 0.33;
+
+    const sizeMap: Record<string, string> = {
+      small: '52px', medium: '62px', large: '72px', full: '84px',
+    };
+    const fontSize = sizeMap[level] ?? '52px';
+    const labelText = `착지 마일스톤! +${coins} coin`;
+
+    const label = this.add
+      .text(cx, cy, labelText, {
+        fontSize,
+        fontStyle: 'bold',
+        color: '#ffffff',
+        stroke: '#1133aa',
+        strokeThickness: 7,
+        backgroundColor: '#00224488',
+        padding: { x: 36, y: 18 },
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.HUD + 2)
+      .setAlpha(0);
+
+    // 전체 화면 플래시 (full 마일스톤 전용)
+    if (level === 'full') {
+      const flash = this.add
+        .rectangle(0, 0, BASE_WIDTH, BASE_HEIGHT, 0xffffff, 0.28)
+        .setOrigin(0)
+        .setScrollFactor(0)
+        .setDepth(DEPTH.HUD + 1);
+      this.tweens.add({
+        targets: flash,
+        alpha: 0,
+        duration: 400,
+        ease: 'Sine.easeIn',
+        onComplete: () => flash.destroy(),
+      });
+    }
+
+    this.tweens.add({
+      targets: label,
+      alpha: 1,
+      duration: 280,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.time.delayedCall(1100, () => {
+          this.tweens.add({
+            targets: label,
+            alpha: 0,
+            y: cy - 70,
+            duration: 550,
+            ease: 'Sine.easeIn',
+            onComplete: () => label.destroy(),
+          });
+        });
+      },
+    });
+  }
+
   // ─── 씬 정리 ───────────────────────────────────────────
 
   shutdown(): void {
+    this.events.off(EVENTS.BIG_JUMP, this.onBigJump, this);
+    this.events.off(EVENTS.MILESTONE, this.onMilestone, this);
     if (this._onVisibilityChange) {
       document.removeEventListener('visibilitychange', this._onVisibilityChange);
       this._onVisibilityChange = null;
@@ -1607,8 +1642,6 @@ export class GameScene extends Phaser.Scene {
     this.scoreHud?.destroy();
     this.pausePopup?.destroy();
     this.pausePopup = null;
-    this.revivePopup?.destroy();
-    this.revivePopup = null;
     this.actionPanel?.destroy();
     this.leftMetaPanel?.destroy();
     this.rightMetaPanel?.destroy();

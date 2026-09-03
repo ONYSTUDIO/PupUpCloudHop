@@ -17,6 +17,8 @@ export const EVENTS = {
   SCORE_UPDATE: 'score_update',
   GAME_OVER: 'game_over',
   GAME_START: 'game_start',
+  BIG_JUMP: 'big_jump',
+  MILESTONE: 'milestone',
 } as const;
 
 export const DEPTH = {

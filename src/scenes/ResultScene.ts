@@ -11,6 +11,8 @@ interface ResultSceneData {
   pattern: JumpPatternType;
   coinsEarned: number;
   totalCoins: number;
+  milestoneCount: number;
+  coinBags: { coins: number }[];
 }
 
 export class ResultScene extends Phaser.Scene {
@@ -29,6 +31,8 @@ export class ResultScene extends Phaser.Scene {
       data.pattern,
       data.coinsEarned,
       data.totalCoins,
+      data.milestoneCount,
+      data.coinBags,
     );
     void this.syncToDb(data.score.current, data.score.jumps, data.coinsEarned);
   }
