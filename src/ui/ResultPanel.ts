@@ -232,6 +232,9 @@ export class ResultPanel {
 
         // 팝 파티클
         this.spawnBagPopParticles(scene, bag.x, bag.y);
+
+        // +n 플로팅 텍스트
+        this.spawnCoinPopLabel(scene, stage.end - stage.start, coinLabel.x, coinLabel.y);
       });
     }
   }
@@ -260,6 +263,45 @@ export class ResultPanel {
         onComplete: () => dot.destroy(),
       });
     }
+  }
+
+  /** 주머니 팝 시 코인 획득량 플로팅 텍스트 */
+  private spawnCoinPopLabel(
+    scene: Phaser.Scene,
+    amount: number,
+    refX: number,
+    refY: number,
+  ): void {
+    const label = scene.add
+      .text(refX + 160, refY - 16, `+${amount}`, {
+        fontSize: '52px', fontStyle: 'bold',
+        color: '#ffcc00', stroke: '#885500', strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.POPUP + 2)
+      .setScrollFactor(0)
+      .setAlpha(0);
+
+    scene.tweens.add({
+      targets: label,
+      y: refY - 68,
+      alpha: 1,
+      scaleX: 1.15, scaleY: 1.15,
+      duration: 220,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        scene.tweens.add({
+          targets: label,
+          y: refY - 120,
+          alpha: 0,
+          scaleX: 0.9, scaleY: 0.9,
+          delay: 120,
+          duration: 420,
+          ease: 'Quad.easeIn',
+          onComplete: () => label.destroy(),
+        });
+      },
+    });
   }
 
   /** 코인 주머니 그래픽 Container 생성 */
