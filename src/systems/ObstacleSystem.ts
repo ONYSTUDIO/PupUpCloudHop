@@ -9,10 +9,12 @@ export class ObstacleSystem {
   // ── 새떼 ────────────────────────────────────────────────
   private flocks: BirdFlock[] = [];
   private nextFlockTime: number;
+  private birdsUnlocked: boolean = false;
 
   // ── 번개 폭풍 ───────────────────────────────────────────
   private storm: LightningStorm | null = null;
   private nextStormTime: number;
+  private stormUnlocked: boolean = false;
 
   // ── 동결 상태 (얼음 아이템 효과) ────────────────────────
   private _isFrozen: boolean = false;
@@ -32,13 +34,26 @@ export class ObstacleSystem {
 
   // ── 새떼 업데이트 ────────────────────────────────────────
 
-  update(delta: number, now: number, cameraScrollY: number): void {
+  update(delta: number, now: number, cameraScrollY: number, score: number): void {
     if (this._isFrozen) {
       // 스폰 타이머를 동결 시간만큼 밀어 해제 후 즉시 스폰 방지
       this.nextFlockTime += delta;
       // 현재 위치에서 렌더링만 유지 (delta=0으로 위치·날갯짓 정지)
       for (const flock of this.flocks) flock.update(0);
       return;
+    }
+
+    // 점수 미달 시 스폰 타이머를 밀어 해금 직후 즉시 스폰 방지
+    if (score < OBSTACLE_CONFIG.BIRD_UNLOCK_SCORE) {
+      this.nextFlockTime += delta;
+      for (const flock of this.flocks) flock.update(delta);
+      return;
+    }
+
+    // 새떼 첫 해금 시 유예 타이머 세팅
+    if (!this.birdsUnlocked) {
+      this.birdsUnlocked = true;
+      this.nextFlockTime = now + OBSTACLE_CONFIG.BIRD_UNLOCK_DELAY_MS;
     }
 
     if (now >= this.nextFlockTime) {
@@ -69,6 +84,7 @@ export class ObstacleSystem {
     now: number,
     cameraScrollY: number,
     currentCloud: CloudIsland | null,
+    score: number,
   ): string | null {
     if (this._isFrozen) {
       // 스폰 타이머 밀기
@@ -80,6 +96,18 @@ export class ObstacleSystem {
 
     // 폭풍 없음 → 스폰 여부 확인
     if (this.storm === null) {
+      // 점수 미달 시 스폰 타이머를 밀어 해금 직후 즉시 스폰 방지
+      if (score < OBSTACLE_CONFIG.STORM_UNLOCK_SCORE) {
+        this.nextStormTime += delta;
+        return null;
+      }
+
+      // 번개 첫 해금 시 유예 타이머 세팅 (기존 STORM_FIRST_SPAWN_DELAY_MS 재활용)
+      if (!this.stormUnlocked) {
+        this.stormUnlocked = true;
+        this.nextStormTime = now + OBSTACLE_CONFIG.STORM_FIRST_SPAWN_DELAY_MS;
+      }
+
       if (now >= this.nextStormTime) {
         this.storm = new LightningStorm(this.scene);
         this.nextStormTime = now + Phaser.Math.Between(

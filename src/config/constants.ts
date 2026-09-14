@@ -93,6 +93,11 @@ export const SPAWN_CONFIG = {
 
 // 장애물 설정
 export const OBSTACLE_CONFIG = {
+  // 점수 기반 해금 임계값
+  BIRD_UNLOCK_SCORE: 10,
+  STORM_UNLOCK_SCORE: 30,
+  // 해금 직후 첫 스폰까지 유예 시간
+  BIRD_UNLOCK_DELAY_MS: 3000,
   // 새떼
   BIRD_FLOCK_HALF_W: 140,
   BIRD_FLOCK_HALF_H: 55,

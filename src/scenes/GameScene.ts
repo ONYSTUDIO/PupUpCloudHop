@@ -254,14 +254,15 @@ export class GameScene extends Phaser.Scene {
     }
 
     // 3. 장애물 업데이트 (새떼 + 번개)
-    this.obstacleSystem.update(delta, this.time.now, scrollY);
+    const currentScore = this.scoreSystem.getScore().current;
+    this.obstacleSystem.update(delta, this.time.now, scrollY, currentScore);
     this.checkObstacleCollisions();
 
     const currentCloud = this.player.isOnGround
       ? (this.clouds.find((c) => c.id === this.currentCloudId) ?? null)
       : null;
     const stormHitId = this.obstacleSystem.updateStorm(
-      delta, this.time.now, scrollY, currentCloud,
+      delta, this.time.now, scrollY, currentCloud, currentScore,
     );
     if (stormHitId !== null) {
       // 방어막이 활성 상태이고 플레이어가 탑승 중인 구름이 번개에 맞은 경우 → 방어막 소모로 무효화

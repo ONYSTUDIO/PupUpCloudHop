@@ -71,9 +71,10 @@
 
 > ✅ 구현 완료: 새떼(BIRD_FLOCK) · 번개 폭풍(LIGHTNING_STORM)
 
-- [ ] **장애물 등장 밸런스 — 점수 기반 잠금 해제**
-  - 0~9점: 장애물 없음 / 10점~: 새떼 / 30점~: 번개 폭풍 추가
-  - 구현 위치: `ObstacleSystem.updateStorm()` / `.update()`
+- [x] **장애물 등장 밸런스 — 점수 기반 잠금 해제** ✅
+  - 0~9점: 장애물 없음 / 10점~: 새떼 (해금 후 3초 유예) / 30점~: 번개 폭풍 (해금 후 25초 유예)
+  - `OBSTACLE_CONFIG.BIRD_UNLOCK_SCORE: 10` / `STORM_UNLOCK_SCORE: 30` / `BIRD_UNLOCK_DELAY_MS: 3000`
+  - 구현 위치: `ObstacleSystem.update()` / `.updateStorm()` — score 미달 시 타이머 슬라이딩, 첫 해금 시 유예 타이머 세팅
 - [ ] **장애물 스폰 간격 난이도 연동** (점수가 높을수록 등장 주기 단축)
 
 ### 아이템 / 패시브
