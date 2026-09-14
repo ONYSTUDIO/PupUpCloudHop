@@ -492,6 +492,10 @@ export class MainScene extends Phaser.Scene {
       () => {
         this.saveManager.addRevivalItem(1);
       },
+      () => {
+        this.saveManager.resetAttendanceState();
+        this.refreshAttendanceBadge();
+      },
     );
   }
 

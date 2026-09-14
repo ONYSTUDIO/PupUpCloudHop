@@ -24,7 +24,7 @@ export interface CheatSettings {
 const CX = BASE_WIDTH / 2;
 const CY = BASE_HEIGHT / 2;
 const PANEL_W = 780;
-const PANEL_H = 960;
+const PANEL_H = 1060;
 
 export class CheatPopup {
   private objs: Phaser.GameObjects.GameObject[] = [];
@@ -44,6 +44,7 @@ export class CheatPopup {
     onClose: (s: CheatSettings) => void,
     onResetMissions: () => void,
     onAddRevivalItem: () => void,
+    onResetAttendance: () => void,
   ) {
     this.pattern = initial.pattern;
     this.shield = initial.startWithShield;
@@ -189,9 +190,32 @@ export class CheatPopup {
       });
     this.reg(revivalBtn);
 
+    // ── 출석 초기화 ──────────────────────────────────────────
+    this.reg(
+      scene.add.text(CX - 80, CY + 460, '출석 초기화', {
+        fontSize: '46px', color: '#aaddcc',
+      }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP),
+    );
+    const attendanceResetBtn = scene.add.text(CX + 120, CY + 460, '초기화', {
+      fontSize: '44px', fontStyle: 'bold', color: '#ffffff',
+      backgroundColor: '#226644', padding: { x: 32, y: 14 },
+      fixedWidth: 160, align: 'center',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.POPUP)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerover', function (this: Phaser.GameObjects.Text) { this.setAlpha(0.85); })
+      .on('pointerout',  function (this: Phaser.GameObjects.Text) { this.setAlpha(1); })
+      .on('pointerdown', () => {
+        onResetAttendance();
+        attendanceResetBtn.setText('완료!');
+        scene.time.delayedCall(1200, () => {
+          if (!this.destroyed) attendanceResetBtn.setText('초기화');
+        });
+      });
+    this.reg(attendanceResetBtn);
+
     // ── 닫기 버튼 ────────────────────────────────────────────
     this.reg(
-      scene.add.text(CX, CY + 460, '닫기', {
+      scene.add.text(CX, CY + 545, '닫기', {
         fontSize: '56px', fontStyle: 'bold', color: '#ffffff',
         backgroundColor: '#2a5a80', padding: { x: 80, y: 22 },
       }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.POPUP)
