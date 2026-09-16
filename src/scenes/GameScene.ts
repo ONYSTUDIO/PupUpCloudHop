@@ -87,6 +87,10 @@ export class GameScene extends Phaser.Scene {
   private jumpedFromId: string = '';
   private jumpTime: number = 0;
   private isGameOver: boolean = false;
+  private isDangerSlow: boolean = false;
+  private dangerSlowElapsed: number = 0;
+  private jumpTargetCloud: CloudIsland | null = null; // 이번 점프의 확정 Target Cloud
+  private dramaticTriggeredThisJump: boolean = false;  // 점프당 1회 제한
   private isPaused: boolean = false;
   private jumpPattern: JumpPatternType = JumpPatternType.PATTERN_3;
   private landingOffsetX: number = 0;
@@ -122,6 +126,10 @@ export class GameScene extends Phaser.Scene {
   create(data?: { pattern?: JumpPatternType; startWithShield?: boolean; startWithMagnet?: boolean }): void {
     this.jumpPattern = data?.pattern ?? JumpPatternType.PATTERN_3;
     this.isGameOver = false;
+    this.isDangerSlow = false;
+    this.dangerSlowElapsed = 0;
+    this.jumpTargetCloud = null;
+    this.dramaticTriggeredThisJump = false;
     this.isPaused = false;
     this.bonusCoinsEarned = 0;
     this.coinBags = [];
@@ -200,6 +208,10 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     if (this.isGameOver || this.isPaused) return;
+    if (this.isDangerSlow) {
+      this.updateDangerSlow(delta);
+      return;
+    }
 
     const dt = delta / 1000;
     const scrollY = this.cameras.main.scrollY;
@@ -287,6 +299,7 @@ export class GameScene extends Phaser.Scene {
       this.applyPhysics(dt);
       this.checkLanding();
       this.checkFallDeath();
+      this.checkDangerSlowTrigger();
     }
 
     // 6. 그래픽 동기화
@@ -703,6 +716,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(0x87ceeb);
     this.cameras.main.setBounds(-Infinity, -Infinity, Infinity, Infinity);
     this.cameras.main.setScroll(0, 0);
+    this.cameras.main.setZoom(1);
   }
 
   private setupVisibilityPause(): void {
@@ -883,6 +897,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateCamera(): void {
+    if (this.isDangerSlow) return;
     const targetScrollY = this.player.y - BASE_HEIGHT * GAMEPLAY.CAMERA_FOLLOW_THRESHOLD;
     const currentScrollY = this.cameras.main.scrollY;
     if (targetScrollY < currentScrollY) {
@@ -1035,11 +1050,16 @@ export class GameScene extends Phaser.Scene {
     if (jumped) {
       this.jumpedFromId = this.currentCloudId;
       this.jumpTime = this.time.now;
+      this.resetMissDetection();
+      this.jumpTargetCloud = this.findJumpTarget();
       this._parabolicJump = (this.jumpPattern === JumpPatternType.PATTERN_1);
     }
   }
 
   private handleLand(cloud: CloudIsland): void {
+    if (this.isDangerSlow) this.cancelDangerSlow();
+    this.resetMissDetection();
+
     this._parabolicJump = false;
     const prevId = this.currentCloudId;
 
@@ -1196,10 +1216,13 @@ export class GameScene extends Phaser.Scene {
     this.topHud.updateProfile(name, isGuest);
   }
 
-  private triggerGameOver(delay: number = 1000): void {
+  private triggerGameOver(_delay: number = 1000): void {
     if (this.isGameOver) return;
-    this.isGameOver = true;
 
+    // danger slow 진행 중이면 연출 즉시 정리
+    if (this.isDangerSlow) this.cleanupDangerSlow();
+
+    this.isGameOver = true;
     this.player.isDead = true;
     this.inputManager.disable();
     this.audioManager.stopBgm();
@@ -1210,10 +1233,131 @@ export class GameScene extends Phaser.Scene {
 
     this.events.emit(EVENTS.GAME_OVER);
 
-    // 결과 화면으로 바로 이동 (부활 팝업 없이)
-    this.time.delayedCall(Math.max(delay, 800), () => {
+    this.time.delayedCall(600, () => {
       if (this.scene.isActive(SCENE_KEYS.GAME)) this.finalizeGameOver();
     });
+  }
+
+  // ─── Dramatic 연출 (위험 상황 줌인 + 슬로우모션) ──────────
+
+  private updateDangerSlow(delta: number): void {
+    const slowDelta = delta * GAMEPLAY.DRAMATIC_SLOW_FACTOR;
+    const dt        = slowDelta / 1000;
+
+    this.dangerSlowElapsed += delta;
+
+    // 월드 슬로모션
+    this.movementSystem.update(slowDelta);
+    this.spawnSystem.updateVortexPositions(slowDelta);
+
+    // 플레이어 물리 슬로모션
+    this.applyPhysics(dt);
+    this.player.sync();
+    // 카메라 추적은 startFollow가 preRender에서 자동으로 처리함 (수동 setScroll 불필요)
+
+    // 착지 체크 → 성공 시 연출 취소 후 정상 게임 복귀
+    this.checkLanding();
+    if (this.player.isOnGround) return; // handleLand → cancelDangerSlow 에서 처리
+
+    // 안전장치: DRAMATIC_DURATION_MS 경과 시 게임오버
+    if (this.dangerSlowElapsed >= GAMEPLAY.DRAMATIC_DURATION_MS) {
+      this.cleanupDangerSlow();
+      this.triggerGameOver(0);
+    }
+  }
+
+  private startDangerSlow(): void {
+    this.isDangerSlow          = true;
+    this.dangerSlowElapsed     = 0;
+    this.dramaticTriggeredThisJump = true;
+
+    const cam = this.cameras.main;
+    // player 객체의 x/y를 Phaser Camera Follow Target으로 직접 등록.
+    // startFollow는 즉시 scrollX = player.x - cam.width/2 로 세팅 후
+    // 이후 매 preRender 마다 플레이어 위치를 따라 scroll을 갱신하므로
+    // zoom 변화 중에도 플레이어가 항상 화면 정중앙에 위치한다.
+    cam.startFollow(this.player as unknown as Phaser.GameObjects.GameObject, false, 1, 1);
+    cam.zoomTo(GAMEPLAY.DRAMATIC_ZOOM, GAMEPLAY.DRAMATIC_ZOOM_IN_MS, 'Quad.easeOut');
+  }
+
+  private cancelDangerSlow(): void {
+    const scrollY = this.cameras.main.scrollY;
+    this.cleanupDangerSlow();
+    const cam = this.cameras.main;
+    // 일반 모드 scrollX = 0 으로 즉시 복귀 (일반 카메라는 항상 scrollX=0 사용)
+    cam.setScroll(0, scrollY);
+    cam.zoomTo(1, GAMEPLAY.DRAMATIC_ZOOM_OUT_MS, 'Quad.easeOut');
+  }
+
+  private cleanupDangerSlow(): void {
+    this.isDangerSlow      = false;
+    this.dangerSlowElapsed = 0;
+    this.cameras.main.stopFollow();
+  }
+
+  private resetMissDetection(): void {
+    this.jumpTargetCloud         = null;
+    this.dramaticTriggeredThisJump = false;
+  }
+
+  /**
+   * 이번 점프의 Target Cloud를 결정한다.
+   * JumpSystem.findTarget()과 동일한 선택 기준 (위쪽 구름 우선, 없으면 가장 가까운 구름).
+   */
+  private findJumpTarget(): CloudIsland | null {
+    const others = this.clouds.filter(c => !c.isFalling && c.id !== this.jumpedFromId);
+    if (others.length === 0) return null;
+
+    const above = others.filter(c => c.y < this.player.y - 60);
+    const pool  = above.length > 0 ? above : others;
+
+    return pool.reduce<CloudIsland>((best, c) => {
+      const db = Math.hypot(best.x - this.player.x, best.y - this.player.y);
+      const dc = Math.hypot(c.x    - this.player.x, c.y    - this.player.y);
+      return dc < db ? c : best;
+    }, pool[0] as CloudIsland);
+  }
+
+  /**
+   * MISS 판정 — Target Cloud의 실제 착지 가능 Y 범위를 하강 중에 통과했고
+   * 그 시점에 X overlap이 없으면 MISS 확정.
+   */
+  private checkDangerSlowTrigger(): void {
+    if (this.player.isOnGround || this.isDangerSlow || this.isGameOver) return;
+    if (this.isMagnetPulling || this.isRocketMode || this.dramaticTriggeredThisJump) return;
+
+    // 상승 중에는 MISS 판정 안 함 (vy < 0 = 위로 이동)
+    if (this.player.vy <= 0) return;
+
+    // Target이 낙하 중이면 더 이상 추적 불가 → 폴백만 사용
+    if (this.jumpTargetCloud?.isFalling) {
+      this.jumpTargetCloud = null;
+    }
+
+    if (this.jumpTargetCloud !== null) {
+      const cloud = this.jumpTargetCloud;
+
+      // 착지 판정 Y 범위: cloudTop - LAND_TOLERANCE_Y ~ cloudTop + LAND_TOLERANCE_Y + 18
+      // (CollisionSystem.check 와 동일한 범위)
+      const landingWindowBottom = cloud.topY + GAMEPLAY.LAND_TOLERANCE_Y + 18;
+
+      // 하강 중 착지 가능 Y 범위를 완전히 통과했는지 확인
+      if (this.player.bottom > landingWindowBottom) {
+        const hasXOverlap = this.player.right > cloud.leftX && this.player.left < cloud.rightX;
+        if (!hasXOverlap) {
+          // X 영역 overlap 없이 착지 높이를 통과 → MISS 확정
+          this.startDangerSlow();
+          return;
+        }
+        // X overlap 있으면 이미 CollisionSystem에서 착지 처리됐거나 곧 처리됨
+      }
+    } else {
+      // Target을 특정할 수 없을 때만 안전장치 시간 트리거
+      const elapsedSec = (this.time.now - this.jumpTime) / 1000;
+      if (elapsedSec > GAMEPLAY.DRAMATIC_SAFETY_SEC) {
+        this.startDangerSlow();
+      }
+    }
   }
 
   private finalizeGameOver(): void {
@@ -1269,6 +1413,8 @@ export class GameScene extends Phaser.Scene {
       this.magnetPullTarget = null;
       this._physicsGravity = true;
       this.jumpTime = this.time.now;
+      this.resetMissDetection();
+      this.jumpTargetCloud = this.findJumpTarget();
       return;
     }
 
@@ -1407,6 +1553,8 @@ export class GameScene extends Phaser.Scene {
     this._physicsGravity = true;
     this.jumpTime = this.time.now;
     this.jumpedFromId = '';
+    this.resetMissDetection();
+    this.jumpTargetCloud = this.findJumpTarget();
 
     this.time.delayedCall(250, () => {
       if (!this.isGameOver && !this.player.isDead) {

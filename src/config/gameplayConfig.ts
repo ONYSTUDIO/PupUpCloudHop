@@ -50,6 +50,14 @@ export const GAMEPLAY = {
 
   // 구름섬 낙하 (번개 폭풍 명중 후)
   CLOUD_FALL_GRAVITY: 900,
+
+  // 위험 상황 Dramatic 연출
+  DRAMATIC_ZOOM: 2.0,              // dramatic 중 카메라 줌 배율
+  DRAMATIC_SLOW_FACTOR: 0.2,       // dramatic 중 게임 속도 배율 (거의 멈춘 듯)
+  DRAMATIC_ZOOM_IN_MS: 150,        // 갑작스러운 줌인 tween 시간
+  DRAMATIC_ZOOM_OUT_MS: 400,       // 착지 성공 시 줌 복귀 tween 시간
+  DRAMATIC_DURATION_MS: 2500,      // 안전장치: 이 시간 경과 후 게임오버
+  DRAMATIC_SAFETY_SEC: 5.0,        // 안전장치: jump target 없을 때 폴백 시간 트리거
 } as const;
 
 // 인-런 마일스톤: 착지 수 달성 시 코인 자동 지급 (한 판 1회)
