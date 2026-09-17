@@ -58,6 +58,15 @@ export const GAMEPLAY = {
   DRAMATIC_ZOOM_OUT_MS: 400,       // 착지 성공 시 줌 복귀 tween 시간
   DRAMATIC_DURATION_MS: 2500,      // 안전장치: 이 시간 경과 후 게임오버
   DRAMATIC_SAFETY_SEC: 5.0,        // 안전장치: jump target 없을 때 폴백 시간 트리거
+
+  // Fly-Out Dramatic (긴 비행 + 화면 이탈 직전 연출)
+  FLYOUT_DRAMATIC_MIN_DISTANCE_RATIO: 0.6, // 화면 대각선 × N 이상 누적 비행 거리 시 후보
+  FLYOUT_EDGE_DANGER_RATIO: 0.12,          // viewport 가장자리 N% = Danger Zone
+  // Fly-Out Dramatic 3단계 타이밍 (real-time 기준)
+  FLYOUT_DRAMATIC_ZOOM_IN_MS:  180,  // [1] Zoom In 단계 지속 시간
+  FLYOUT_DRAMATIC_HOLD_MS:     850,  // [2] Hold 단계 (확대 유지 + 강한 Slow Motion)
+  FLYOUT_DRAMATIC_RETURN_MS:   300,  // [3] Return 단계 Zoom Out 지속 시간
+  FLYOUT_DRAMATIC_SLOW_FACTOR: 0.12, // Fly-Out 전용 Slow Motion (Landing Miss 0.2보다 강함)
 } as const;
 
 // 인-런 마일스톤: 착지 수 달성 시 코인 자동 지급 (한 판 1회)

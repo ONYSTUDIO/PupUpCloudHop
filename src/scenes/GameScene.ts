@@ -89,8 +89,13 @@ export class GameScene extends Phaser.Scene {
   private isGameOver: boolean = false;
   private isDangerSlow: boolean = false;
   private dangerSlowElapsed: number = 0;
-  private jumpTargetCloud: CloudIsland | null = null; // 이번 점프의 확정 Target Cloud
-  private dramaticTriggeredThisJump: boolean = false;  // 점프당 1회 제한
+  private isFlyOutDramatic: boolean = false;           // true = Fly-Out 연출 중
+  private jumpTargetCloud: CloudIsland | null = null;  // 이번 점프의 확정 Target Cloud
+  private dramaticTriggeredThisJump: boolean = false;  // Landing Miss 점프당 1회 제한
+  private flyOutDramaticTriggeredThisJump: boolean = false; // Fly-Out 점프당 1회 제한
+  private airborneDistAccum: number = 0;  // 공중 누적 이동 거리 (px)
+  private airbornePrevX: number = 0;
+  private airbornePrevY: number = 0;
   private isPaused: boolean = false;
   private jumpPattern: JumpPatternType = JumpPatternType.PATTERN_3;
   private landingOffsetX: number = 0;
@@ -128,8 +133,13 @@ export class GameScene extends Phaser.Scene {
     this.isGameOver = false;
     this.isDangerSlow = false;
     this.dangerSlowElapsed = 0;
+    this.isFlyOutDramatic = false;
     this.jumpTargetCloud = null;
     this.dramaticTriggeredThisJump = false;
+    this.flyOutDramaticTriggeredThisJump = false;
+    this.airborneDistAccum = 0;
+    this.airbornePrevX = 0;
+    this.airbornePrevY = 0;
     this.isPaused = false;
     this.bonusCoinsEarned = 0;
     this.coinBags = [];
@@ -297,9 +307,11 @@ export class GameScene extends Phaser.Scene {
       this.followCurrentCloud();
     } else {
       this.applyPhysics(dt);
+      this.accumulateAirborneDistance();
       this.checkLanding();
       this.checkFallDeath();
       this.checkDangerSlowTrigger();
+      this.checkFlyOutDramaticTrigger();
     }
 
     // 6. 그래픽 동기화
@@ -1241,10 +1253,14 @@ export class GameScene extends Phaser.Scene {
   // ─── Dramatic 연출 (위험 상황 줌인 + 슬로우모션) ──────────
 
   private updateDangerSlow(delta: number): void {
-    const slowDelta = delta * GAMEPLAY.DRAMATIC_SLOW_FACTOR;
+    // Fly-Out은 전용 Slow Factor 사용 (Landing Miss보다 더 강한 슬로우)
+    const slowFactor = this.isFlyOutDramatic
+      ? GAMEPLAY.FLYOUT_DRAMATIC_SLOW_FACTOR
+      : GAMEPLAY.DRAMATIC_SLOW_FACTOR;
+    const slowDelta = delta * slowFactor;
     const dt        = slowDelta / 1000;
 
-    this.dangerSlowElapsed += delta;
+    this.dangerSlowElapsed += delta; // real-time 기준 누적
 
     // 월드 슬로모션
     this.movementSystem.update(slowDelta);
@@ -1259,10 +1275,21 @@ export class GameScene extends Phaser.Scene {
     this.checkLanding();
     if (this.player.isOnGround) return; // handleLand → cancelDangerSlow 에서 처리
 
-    // 안전장치: DRAMATIC_DURATION_MS 경과 시 게임오버
-    if (this.dangerSlowElapsed >= GAMEPLAY.DRAMATIC_DURATION_MS) {
-      this.cleanupDangerSlow();
-      this.triggerGameOver(0);
+    if (this.isFlyOutDramatic) {
+      // Fly-Out 3단계: ZOOM_IN(0~ZOOM_IN_MS) → HOLD(~+HOLD_MS) → RETURN(endFlyOutDramatic 호출)
+      // ZOOM_IN / HOLD 는 slow motion + camera follow 유지.
+      // HOLD 종료 시점에 endFlyOutDramatic() → camera 복귀 + time scale 정상화.
+      // 게임오버 예약 X — 실제 화면 이탈 시 checkFallDeath 가 처리.
+      const holdEndMs = GAMEPLAY.FLYOUT_DRAMATIC_ZOOM_IN_MS + GAMEPLAY.FLYOUT_DRAMATIC_HOLD_MS;
+      if (this.dangerSlowElapsed >= holdEndMs) {
+        this.endFlyOutDramatic();
+      }
+    } else {
+      // Landing Miss: 시간 초과 후 게임오버 (안전장치)
+      if (this.dangerSlowElapsed >= GAMEPLAY.DRAMATIC_DURATION_MS) {
+        this.cleanupDangerSlow();
+        this.triggerGameOver(0);
+      }
     }
   }
 
@@ -1282,6 +1309,7 @@ export class GameScene extends Phaser.Scene {
 
   private cancelDangerSlow(): void {
     const scrollY = this.cameras.main.scrollY;
+    this.isFlyOutDramatic = false;
     this.cleanupDangerSlow();
     const cam = this.cameras.main;
     // 일반 모드 scrollX = 0 으로 즉시 복귀 (일반 카메라는 항상 scrollX=0 사용)
@@ -1296,8 +1324,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private resetMissDetection(): void {
-    this.jumpTargetCloud         = null;
-    this.dramaticTriggeredThisJump = false;
+    this.jumpTargetCloud               = null;
+    this.dramaticTriggeredThisJump     = false;
+    this.flyOutDramaticTriggeredThisJump = false;
+    this.airborneDistAccum             = 0;
+    this.airbornePrevX                 = this.player.x;
+    this.airbornePrevY                 = this.player.y;
   }
 
   /**
@@ -1358,6 +1390,86 @@ export class GameScene extends Phaser.Scene {
         this.startDangerSlow();
       }
     }
+  }
+
+  // ─── Fly-Out Dramatic (긴 비행 + 화면 이탈 직전 연출) ─────
+
+  /** 공중 이동 중 매 프레임 실제 비행 거리를 누적한다. */
+  private accumulateAirborneDistance(): void {
+    const dx = this.player.x - this.airbornePrevX;
+    const dy = this.player.y - this.airbornePrevY;
+    this.airborneDistAccum += Math.hypot(dx, dy);
+    this.airbornePrevX = this.player.x;
+    this.airbornePrevY = this.player.y;
+  }
+
+  /**
+   * Player가 viewport 가장자리 Danger Zone에 있는지 판정.
+   * 좌/우 이탈이 주 케이스이므로 Top edge는 제외 (카메라가 위를 따라가므로 오탐 방지).
+   * 모두 일반 카메라 기준 (scrollX=0, zoom=1) world 좌표 계산.
+   */
+  private isInEdgeDangerZone(): boolean {
+    const cam    = this.cameras.main;
+    const ratio  = GAMEPLAY.FLYOUT_EDGE_DANGER_RATIO;
+    const marginX = BASE_WIDTH  * ratio;
+    const marginY = BASE_HEIGHT * ratio;
+
+    // Normal camera: scrollX=0, zoom=1 → player screen X = player.x
+    const screenX = this.player.x;
+    const screenY = this.player.y - cam.scrollY;
+
+    return (
+      screenX < marginX ||                    // 왼쪽 이탈 직전
+      screenX > BASE_WIDTH - marginX ||       // 오른쪽 이탈 직전
+      screenY > BASE_HEIGHT - marginY         // 아래쪽 이탈 직전 (위는 카메라가 따라가므로 제외)
+    );
+  }
+
+  /**
+   * Fly-Out Dramatic Trigger.
+   * 조건: AIRBORNE + 누적 비행거리 ≥ 임계값 + Edge Danger Zone 진입 + 점프당 1회
+   */
+  private checkFlyOutDramaticTrigger(): void {
+    if (this.player.isOnGround || this.isDangerSlow || this.isGameOver) return;
+    if (this.isMagnetPulling || this.isRocketMode) return;
+    if (this.flyOutDramaticTriggeredThisJump) return;
+
+    const diagonal   = Math.hypot(BASE_WIDTH, BASE_HEIGHT); // ≈ 2203px
+    const minDist    = diagonal * GAMEPLAY.FLYOUT_DRAMATIC_MIN_DISTANCE_RATIO;
+
+    if (this.airborneDistAccum < minDist) return;
+    if (!this.isInEdgeDangerZone()) return;
+
+    this.startFlyOutDramatic();
+  }
+
+  private startFlyOutDramatic(): void {
+    this.flyOutDramaticTriggeredThisJump = true;
+    this.dramaticTriggeredThisJump       = true; // Landing Miss도 재발동 방지
+    this.isDangerSlow                    = true;
+    this.isFlyOutDramatic                = true;
+    this.dangerSlowElapsed               = 0;
+
+    const cam = this.cameras.main;
+    cam.startFollow(this.player as unknown as Phaser.GameObjects.GameObject, false, 1, 1);
+    // zoomTo는 Phaser TweenManager로 실행 → 우리 slow factor와 무관하게 real-time 기준
+    cam.zoomTo(GAMEPLAY.DRAMATIC_ZOOM, GAMEPLAY.FLYOUT_DRAMATIC_ZOOM_IN_MS, 'Quad.easeOut');
+  }
+
+  /**
+   * Fly-Out Dramatic 종료.
+   * 연출 후 카메라를 일반 상태로 복귀, 플레이어 물리는 그대로 유지.
+   * 게임오버 직접 호출 X — Player가 실제 화면 밖으로 나갈 때 checkFallDeath가 처리.
+   */
+  private endFlyOutDramatic(): void {
+    this.isFlyOutDramatic = false;
+    const scrollY = this.cameras.main.scrollY;
+    this.cleanupDangerSlow(); // stopFollow + isDangerSlow=false → 다음 프레임부터 일반 루프 재개
+    const cam = this.cameras.main;
+    cam.setScroll(0, scrollY);
+    // [RETURN 단계] real-time 기준 zoom 복귀 — 이후 Player는 정상 속도로 계속 이동
+    // checkFallDeath가 실제 화면 이탈을 감지하면 그때 triggerGameOver
+    cam.zoomTo(1, GAMEPLAY.FLYOUT_DRAMATIC_RETURN_MS, 'Quad.easeOut');
   }
 
   private finalizeGameOver(): void {
