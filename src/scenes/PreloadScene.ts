@@ -9,9 +9,12 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // 실제 에셋이 없으므로 로딩 바만 표시 후 바로 이동
-    // 에셋 추가 시 이 블록에 load.image / load.audio 등을 추가
     this.showLoadingBar();
+    this.load.image('bg_1', 'assets/images/backgrounds/bg_1.png');
+    this.load.image('bg_2', 'assets/images/backgrounds/bg_2.png');
+    this.load.image('bg_ig_sky',   'assets/images/backgrounds/bg_ig_sky.png');
+    this.load.image('bg_ig_cloud', 'assets/images/backgrounds/bg_ig_cloud.png');
+    this.load.image('bg_ig_town',  'assets/images/backgrounds/bg_ig_town.png');
   }
 
   async create(): Promise<void> {

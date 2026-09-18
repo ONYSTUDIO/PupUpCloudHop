@@ -71,6 +71,11 @@ export class GameScene extends Phaser.Scene {
   private leftMetaPanel!: MetaIconPanel;
   private rightMetaPanel!: MetaIconPanel;
 
+  // 배경 레이어
+  private bgSkyTile: Phaser.GameObjects.TileSprite | null = null;
+  private bgCloudTile: Phaser.GameObjects.TileSprite | null = null;
+  private bgFogOverlay: Phaser.GameObjects.Graphics | null = null;
+
   // 그래픽
   private chargeIndicator!: Phaser.GameObjects.Graphics;
   private jumpButtonGraphics!: Phaser.GameObjects.Graphics;
@@ -217,6 +222,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    const camScrollY = this.cameras.main.scrollY;
+    if (this.bgSkyTile) {
+      this.bgSkyTile.tilePositionY = camScrollY * 0.3;
+      // 위로 올라갈수록 하늘이 어두워짐 (scrollY 음수 = 고도 상승)
+      // 800000px 스크롤 시 최대 어둠 (dark midnight blue)
+      const t = Phaser.Math.Clamp(-camScrollY / 800000, 0, 1);
+      const r = Math.round(Phaser.Math.Linear(255, 10, t));
+      const g = Math.round(Phaser.Math.Linear(255, 15, t));
+      const b = Math.round(Phaser.Math.Linear(255, 60, t));
+      this.bgSkyTile.setTint((r << 16) | (g << 8) | b);
+    }
+    if (this.bgCloudTile) this.bgCloudTile.tilePositionY = camScrollY * 0.6;
+    // 안개 오버레이: bg_ig_town이 화면 밖으로 사라지는 만큼 서서히 페이드 아웃
+    if (this.bgFogOverlay) {
+      const fogAlpha = Phaser.Math.Clamp(1 + camScrollY / BASE_HEIGHT, 0, 1);
+      this.bgFogOverlay.setAlpha(fogAlpha);
+    }
+
     if (this.isGameOver || this.isPaused) return;
     if (this.isDangerSlow) {
       this.updateDangerSlow(delta);
@@ -357,6 +380,49 @@ export class GameScene extends Phaser.Scene {
       dg.fillEllipse(x - w * 0.22, y - h * 0.28, w * 0.42, h * 0.65);
       dg.fillEllipse(x + w * 0.12, y - h * 0.35, w * 0.36, h * 0.55);
     });
+
+    // ── 이미지 배경 3레이어 (기존 CSS 배경 위에 얹힘, 삭제하지 않음) ─────
+    // Layer 1 — bg_ig_sky: 가장 뒤, 느린 패럴랙스 무한 타일 스크롤
+    if (this.textures.exists('bg_ig_sky')) {
+      this.bgSkyTile = this.add.tileSprite(0, 0, BASE_WIDTH, BASE_HEIGHT, 'bg_ig_sky')
+        .setOrigin(0, 0)
+        .setScrollFactor(0)
+        .setDepth(1.5)
+        .setTileScale(BASE_WIDTH / 821, BASE_HEIGHT / 1916);
+      this.bgSkyTile.postFX?.addBlur(0, 2, 2);
+    }
+
+    // Layer 2 — bg_ig_cloud: 중간 레이어, 중간 속도 무한 타일 스크롤
+    if (this.textures.exists('bg_ig_cloud')) {
+      this.bgCloudTile = this.add.tileSprite(0, 0, BASE_WIDTH, BASE_HEIGHT, 'bg_ig_cloud')
+        .setOrigin(0, 0)
+        .setScrollFactor(0)
+        .setDepth(1.6)
+        .setTileScale(BASE_WIDTH / 821, BASE_HEIGHT / 1916);
+      this.bgCloudTile.postFX?.addBlur(0, 2, 2);
+    }
+
+    // Layer 3 — bg_ig_town: 최상단, 시작 화면 1회만 표시 (월드 좌표)
+    if (this.textures.exists('bg_ig_town')) {
+      const bgTown = this.add.image(BASE_WIDTH / 2, BASE_HEIGHT / 2, 'bg_ig_town')
+        .setScrollFactor(1)
+        .setDisplaySize(BASE_WIDTH, BASE_HEIGHT)
+        .setDepth(1.8);
+      bgTown.postFX?.addBlur(0, 2, 2);
+    }
+
+    // 하단 안개 오버레이 — bg_ig_sky 하단을 흰 뿌연 효과로 자연스럽게 연결
+    // 화면 하단 55% 영역: 상단(투명) → 하단(흰색 75%) 그라디언트
+    // scrollY에 따라 서서히 사라짐 (1 화면 높이 스크롤 시 완전히 사라짐)
+    this.bgFogOverlay = this.add.graphics()
+      .setScrollFactor(0)
+      .setDepth(1.7); // bg_ig_cloud(1.6) 위, bg_ig_town(1.8) 아래
+    const fogH = BASE_HEIGHT * 0.55;
+    this.bgFogOverlay.fillGradientStyle(
+      0xffffff, 0xffffff, 0xffffff, 0xffffff,
+      0, 0, 0.78, 0.78,
+    );
+    this.bgFogOverlay.fillRect(0, BASE_HEIGHT - fogH, BASE_WIDTH, fogH);
   }
 
   private createClouds(): void {
