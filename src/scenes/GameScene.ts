@@ -127,6 +127,14 @@ export class GameScene extends Phaser.Scene {
   private magnetPullTarget: CloudIsland | null = null;
   private magnetPullTimer: number = 0;
 
+  // 코기 방향 (점프/착지 시점에만 갱신, 매 프레임 변경 없음)
+  private corgiDirection: 'left' | 'right' = 'left';
+  private static readonly DIRECTION_THRESHOLD = 20;
+
+  // 코기 idle 애니메이션 타이머
+  private idleAnimTimer: number = 0;
+  private static readonly IDLE_ANIM_TRIGGER_MS = 2000; // 2초 후 idle-anim 시작
+
   private _onVisibilityChange: (() => void) | null = null;
 
   constructor() {
@@ -159,6 +167,7 @@ export class GameScene extends Phaser.Scene {
     this.isMagnetPulling = false;
     this.magnetPullTarget = null;
     this.magnetPullTimer = 0;
+    this.idleAnimTimer = 0;
     this.clouds = [];
     this.currentCloudId = INITIAL_CLOUD_LAYOUT[0].id;
     this.jumpedFromId = '';
@@ -196,6 +205,7 @@ export class GameScene extends Phaser.Scene {
 
     this.setupBackground();
     this.createClouds();
+    this.drawZoneDebugLines();
     this.createPlayer();
     this.setupUILayers();
     this.setupBottomControls();
@@ -338,6 +348,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     // 6. 그래픽 동기화
+    // 착지 대기 중 일정 시간 경과하면 idle-anim 시작
+    if (this.player.isOnGround && !this.isGameOver && !this.isPaused) {
+      this.idleAnimTimer += delta;
+      if (this.idleAnimTimer >= GameScene.IDLE_ANIM_TRIGGER_MS) {
+        this.player.startIdleAnimation();
+      }
+    }
+    this.player.update(delta);
     this.player.sync();
 
     // 7. 충전 표시 (PATTERN_1 전용)
@@ -404,10 +422,13 @@ export class GameScene extends Phaser.Scene {
 
     // Layer 3 — bg_ig_town: 최상단, 시작 화면 1회만 표시 (월드 좌표)
     if (this.textures.exists('bg_ig_town')) {
-      const bgTown = this.add.image(BASE_WIDTH / 2, BASE_HEIGHT / 2, 'bg_ig_town')
+      const bgTown = this.add.image(BASE_WIDTH / 2, BASE_HEIGHT, 'bg_ig_town')
+        .setOrigin(0.5, 1)
         .setScrollFactor(1)
-        .setDisplaySize(BASE_WIDTH, BASE_HEIGHT)
         .setDepth(1.8);
+      const src = bgTown.texture.getSourceImage() as HTMLImageElement;
+      const townH = BASE_WIDTH * (src.height / src.width);
+      bgTown.setDisplaySize(BASE_WIDTH, townH);
       bgTown.postFX?.addBlur(0, 2, 2);
     }
 
@@ -475,6 +496,26 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private drawZoneDebugLines(): void {
+    const x1 = BASE_WIDTH / 3;
+    const x2 = BASE_WIDTH * 2 / 3;
+    const worldTop = -20000;
+    const worldBottom = BASE_HEIGHT + 1000;
+
+    const g = this.add.graphics().setDepth(DEPTH.HUD - 1);
+    g.lineStyle(4, 0xff0000, 0.7);
+    g.lineBetween(x1, worldTop, x1, worldBottom);
+    g.lineBetween(x2, worldTop, x2, worldBottom);
+
+    // 존 라벨 (카메라 고정)
+    const labelStyle = { fontSize: '36px', color: '#ff0000', backgroundColor: '#00000088', padding: { x: 8, y: 4 } };
+    this.add.text(x1 / 2, BASE_HEIGHT - 200, 'LEFT', labelStyle).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.HUD - 1);
+    this.add.text((x1 + x2) / 2, BASE_HEIGHT - 200, 'CENTER', labelStyle).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.HUD - 1);
+    this.add.text(x2 + (BASE_WIDTH - x2) / 2, BASE_HEIGHT - 200, 'RIGHT', labelStyle).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.HUD - 1);
+    this.add.text(x1, BASE_HEIGHT - 160, `x=${Math.round(x1)}`, labelStyle).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.HUD - 1);
+    this.add.text(x2, BASE_HEIGHT - 160, `x=${Math.round(x2)}`, labelStyle).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.HUD - 1);
+  }
+
   private createPlayer(): void {
     const startCloud = this.clouds.find((c) => c.id === this.currentCloudId);
     const sx = startCloud?.x ?? BASE_WIDTH / 2;
@@ -483,6 +524,9 @@ export class GameScene extends Phaser.Scene {
     this.player = new Player(this, sx, sy);
     this.player.isOnGround = true;
     this.landingOffsetX = 0;
+
+    this.corgiDirection = 'left';
+    this.player.setIdleDirection('left');
   }
 
   private getPlayerHalfH(): number { return 28; }
@@ -1126,11 +1170,20 @@ export class GameScene extends Phaser.Scene {
     );
 
     if (jumped) {
+      this.idleAnimTimer = 0; // idle-anim 리셋 → corgi_left/right로 복귀
       this.jumpedFromId = this.currentCloudId;
       this.jumpTime = this.time.now;
       this.resetMissDetection();
       this.jumpTargetCloud = this.findJumpTarget();
       this._parabolicJump = (this.jumpPattern === JumpPatternType.PATTERN_1);
+
+      // 점프 방향 확정 — 현재 구름 vs 타깃 구름 X 비교, 착지까지 고정
+      const fromCloud = this.clouds.find(c => c.id === this.jumpedFromId);
+      const toCloud   = this.jumpTargetCloud;
+      if (fromCloud && toCloud) {
+        this.corgiDirection = this.calcDirection(fromCloud.orbitCenterX, toCloud.orbitCenterX, this.corgiDirection);
+      }
+      this.player.startJump(this.corgiDirection);
     }
   }
 
@@ -1149,6 +1202,14 @@ export class GameScene extends Phaser.Scene {
     this.player.vy = 0;
     this.player.y = cloud.topY - this.player.HALF_H;
     this.currentCloudId = cloud.id;
+
+    // 착지 후 방향: 새로 착지한 구름 → 다음 목표 구름 방향으로 idle 전환
+    this.idleAnimTimer = 0;
+    const nextTarget = this.findIdleDirectionTarget();
+    if (nextTarget) {
+      this.corgiDirection = this.calcDirection(cloud.orbitCenterX, nextTarget.orbitCenterX, this.corgiDirection);
+    }
+    this.player.setIdleDirection(this.corgiDirection);
 
     // 착지 시 화살표 숨기고 휠 상태 복원
     this.showDirectionArrow = false;
@@ -1414,6 +1475,34 @@ export class GameScene extends Phaser.Scene {
       const dc = Math.hypot(c.x    - this.player.x, c.y    - this.player.y);
       return dc < db ? c : best;
     }, pool[0] as CloudIsland);
+  }
+
+  /** 착지 상태에서 방향을 결정하기 위한 가장 가까운 위쪽 구름을 반환한다. */
+  private findIdleDirectionTarget(): CloudIsland | null {
+    const others = this.clouds.filter(c => !c.isFalling && c.id !== this.currentCloudId);
+    if (others.length === 0) return null;
+    const above = others.filter(c => c.y < this.player.y - 60);
+    const pool  = above.length > 0 ? above : others;
+    return pool.reduce<CloudIsland>((best, c) => {
+      const db = Math.hypot(best.x - this.player.x, best.y - this.player.y);
+      const dc = Math.hypot(c.x    - this.player.x, c.y    - this.player.y);
+      return dc < db ? c : best;
+    }, pool[0] as CloudIsland);
+  }
+
+  /**
+   * fromX → toX 방향을 계산한다.
+   * 차이가 DIRECTION_THRESHOLD 이하이면 현재 방향(fallback)을 유지해 깜빡임을 방지한다.
+   */
+  private calcDirection(
+    fromX: number,
+    toX: number,
+    fallback: 'left' | 'right',
+  ): 'left' | 'right' {
+    const dx = toX - fromX;
+    if (dx < -GameScene.DIRECTION_THRESHOLD) return 'left';
+    if (dx >  GameScene.DIRECTION_THRESHOLD) return 'right';
+    return fallback;
   }
 
   /**

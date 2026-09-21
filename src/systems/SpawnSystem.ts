@@ -1,7 +1,10 @@
 import Phaser from 'phaser';
 import { CloudIsland } from '@entities/CloudIsland';
-import { CloudPatternType } from '@game-types/game';
+import { CloudPatternType, type CloudType } from '@game-types/game';
 import { DEPTH, SPAWN_CONFIG } from '@config/constants';
+
+const P1_TYPES: CloudType[] = ['A', 'B', 'C', 'D'];
+const P2_TYPES: CloudType[] = ['B', 'D'];
 
 interface VortexCloudGroup {
   id: string;
@@ -135,10 +138,10 @@ export class SpawnSystem {
   }
 
   private spawnPattern1(scene: Phaser.Scene): CloudIsland {
-    const width = Phaser.Math.Between(190, 260);
-    const height = Phaser.Math.Between(55, 68);
-    const orbitRadiusX = Phaser.Math.Between(65, 120);
-    const orbitRadiusY = Phaser.Math.Between(20, 40);
+    const width = Phaser.Math.Between(230, 310);
+    const height = Phaser.Math.Between(60, 75);
+    const orbitRadiusX = Phaser.Math.Between(80, 145);
+    const orbitRadiusY = Phaser.Math.Between(28, 50);
     const margin = orbitRadiusX + width / 2 + 30;
     const lo = Math.ceil(margin);
     const hi = Math.floor(this.baseWidth - margin);
@@ -181,6 +184,7 @@ export class SpawnSystem {
       width,
       height,
       patternType: CloudPatternType.PATTERN_1,
+      cloudType: Phaser.Math.RND.pick(P1_TYPES),
     });
 
     this.nextSpawnY -= Phaser.Math.Between(
@@ -213,8 +217,8 @@ export class SpawnSystem {
       SPAWN_CONFIG.VORTEX_RADIUS_Y_MAX,
     );
     const cloudCount = Phaser.Math.Between(2, 3) as 2 | 3;
-    const cloudWidth = Phaser.Math.Between(180, 220);
-    const cloudHeight = Phaser.Math.Between(52, 65);
+    const cloudWidth = Phaser.Math.Between(220, 270);
+    const cloudHeight = Phaser.Math.Between(62, 78);
     const halfCW = cloudWidth / 2;
 
     const minCX = radiusX + halfCW + 40;
@@ -230,6 +234,7 @@ export class SpawnSystem {
     const angleOffset = Phaser.Math.FloatBetween(0, Math.PI * 2);
     const groupId = `vg${this.cloudIdCounter++}`;
 
+    const p2Type = Phaser.Math.RND.pick(P2_TYPES); // 그룹 내 모든 구름은 같은 타입
     const clouds: CloudIsland[] = [];
     for (let i = 0; i < cloudCount; i++) {
       const cloudAngle = angleOffset + i * ((Math.PI * 2) / cloudCount);
@@ -250,6 +255,7 @@ export class SpawnSystem {
           height: cloudHeight,
           patternType: CloudPatternType.PATTERN_2,
           vortexAngleOffset: cloudAngle,
+          cloudType: p2Type,
         }),
       );
     }

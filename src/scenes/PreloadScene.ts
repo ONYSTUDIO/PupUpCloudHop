@@ -15,6 +15,19 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image('bg_ig_sky',   'assets/images/backgrounds/bg_ig_sky.png');
     this.load.image('bg_ig_cloud', 'assets/images/backgrounds/bg_ig_cloud.png');
     this.load.image('bg_ig_town',  'assets/images/backgrounds/bg_ig_town.png');
+
+    this.load.image('corgi_left',       'assets/images/characters/corgi_left.png');
+    this.load.image('corgi_right',      'assets/images/characters/corgi_right.png');
+    this.load.image('corgi_jump_left',  'assets/images/characters/corgi_jump_left.png');
+    this.load.image('corgi_jump_right', 'assets/images/characters/corgi_jump_right.png');
+    this.load.image('corgi_idle_1',     'assets/images/characters/corgi_idle_1.png');
+    this.load.image('corgi_idle_2',     'assets/images/characters/corgi_idle_2.png');
+
+    this.load.image('type_A',  'assets/images/platforms/type_A.png');
+    this.load.image('type_B',  'assets/images/platforms/type_B.png');
+    this.load.image('type_C',  'assets/images/platforms/type_C.png');
+    this.load.image('type_D',  'assets/images/platforms/type_D.png');
+    this.load.image('ballon',  'assets/images/platforms/ballon.png');
   }
 
   async create(): Promise<void> {

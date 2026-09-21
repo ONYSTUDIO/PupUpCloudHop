@@ -124,10 +124,10 @@ export const OBSTACLE_CONFIG = {
 export const INITIAL_CLOUD_LAYOUT = [
   // centerY: ACTION_AREA_TOP(1680) - bottomGap(60) - orbitRadiusY(22) - balloon_tip_local(128) = 1470
   // 풍선 꼭지(+128px)가 구름 body 하단(+36px)보다 훨씬 아래까지 내려오므로 balloon 기준으로 계산
-  { id: 'c0', centerX: 540, centerY: 1470, orbitRadiusX: 75,  orbitRadiusY: 22, orbitSpeed: 0.55, startAngle: 0,              rotationDirection:  1 as const, width: 280, height: 72 },
-  { id: 'c1', centerX: 260, centerY: 1360, orbitRadiusX: 100, orbitRadiusY: 32, orbitSpeed: 0.80, startAngle: Math.PI / 3,     rotationDirection: -1 as const, width: 230, height: 64 },
-  { id: 'c2', centerX: 770, centerY: 1060, orbitRadiusX: 115, orbitRadiusY: 38, orbitSpeed: 0.70, startAngle: Math.PI,         rotationDirection:  1 as const, width: 245, height: 66 },
-  { id: 'c3', centerX: 380, centerY:  760, orbitRadiusX: 90,  orbitRadiusY: 28, orbitSpeed: 0.95, startAngle: Math.PI / 2,     rotationDirection: -1 as const, width: 210, height: 60 },
-  { id: 'c4', centerX: 680, centerY:  460, orbitRadiusX: 105, orbitRadiusY: 35, orbitSpeed: 0.85, startAngle: Math.PI * 1.5,   rotationDirection:  1 as const, width: 215, height: 58 },
-  { id: 'c5', centerX: 450, centerY:  170, orbitRadiusX: 70,  orbitRadiusY: 22, orbitSpeed: 1.10, startAngle: Math.PI * 0.7,   rotationDirection: -1 as const, width: 195, height: 56 },
+  { id: 'c0', centerX: 540, centerY: 1470, orbitRadiusX:  90, orbitRadiusY: 28, orbitSpeed: 0.55, startAngle: 0,              rotationDirection:  1 as const, width: 330, height: 80, cloudType: 'A' as const },
+  { id: 'c1', centerX: 260, centerY: 1360, orbitRadiusX: 120, orbitRadiusY: 40, orbitSpeed: 0.80, startAngle: Math.PI / 3,     rotationDirection: -1 as const, width: 280, height: 72, cloudType: 'B' as const },
+  { id: 'c2', centerX: 770, centerY: 1060, orbitRadiusX: 138, orbitRadiusY: 46, orbitSpeed: 0.70, startAngle: Math.PI,         rotationDirection:  1 as const, width: 295, height: 74, cloudType: 'C' as const },
+  { id: 'c3', centerX: 380, centerY:  760, orbitRadiusX: 108, orbitRadiusY: 35, orbitSpeed: 0.95, startAngle: Math.PI / 2,     rotationDirection: -1 as const, width: 260, height: 68, cloudType: 'D' as const },
+  { id: 'c4', centerX: 680, centerY:  460, orbitRadiusX: 125, orbitRadiusY: 42, orbitSpeed: 0.85, startAngle: Math.PI * 1.5,   rotationDirection:  1 as const, width: 265, height: 70, cloudType: 'A' as const },
+  { id: 'c5', centerX: 450, centerY:  170, orbitRadiusX:  85, orbitRadiusY: 28, orbitSpeed: 1.10, startAngle: Math.PI * 0.7,   rotationDirection: -1 as const, width: 245, height: 64, cloudType: 'B' as const },
 ] as const;
