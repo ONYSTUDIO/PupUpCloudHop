@@ -141,7 +141,7 @@ export class GameScene extends Phaser.Scene {
     super({ key: SCENE_KEYS.GAME });
   }
 
-  create(data?: { pattern?: JumpPatternType; startWithShield?: boolean; startWithMagnet?: boolean }): void {
+  create(data?: { pattern?: JumpPatternType; startWithShield?: boolean; startWithMagnet?: boolean; showGuideLines?: boolean }): void {
     this.jumpPattern = data?.pattern ?? JumpPatternType.PATTERN_3;
     this.isGameOver = false;
     this.isDangerSlow = false;
@@ -205,7 +205,7 @@ export class GameScene extends Phaser.Scene {
 
     this.setupBackground();
     this.createClouds();
-    this.drawZoneDebugLines();
+    if (data?.showGuideLines) this.drawZoneDebugLines();
     this.createPlayer();
     this.setupUILayers();
     this.setupBottomControls();

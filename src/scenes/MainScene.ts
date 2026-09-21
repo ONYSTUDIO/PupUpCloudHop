@@ -22,6 +22,7 @@ export class MainScene extends Phaser.Scene {
     pattern: JumpPatternType.PATTERN_3,
     startWithShield: false,
     startWithMagnet: false,
+    showGuideLines: false,
   };
   private cheatPopup: CheatPopup | null = null;
   private missionPopup: MissionPopup | null = null;
@@ -543,6 +544,7 @@ export class MainScene extends Phaser.Scene {
           pattern: this.cheatSettings.pattern,
           startWithShield: this.cheatSettings.startWithShield,
           startWithMagnet: this.cheatSettings.startWithMagnet,
+          showGuideLines: this.cheatSettings.showGuideLines,
         });
       })
       .on('pointerover', () => startBg.setAlpha(0.8))

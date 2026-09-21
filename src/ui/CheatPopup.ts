@@ -19,12 +19,13 @@ export interface CheatSettings {
   pattern: JumpPatternType;
   startWithShield: boolean;
   startWithMagnet: boolean;
+  showGuideLines: boolean;
 }
 
 const CX = BASE_WIDTH / 2;
 const CY = BASE_HEIGHT / 2;
 const PANEL_W = 780;
-const PANEL_H = 1060;
+const PANEL_H = 1160;
 
 export class CheatPopup {
   private objs: Phaser.GameObjects.GameObject[] = [];
@@ -33,10 +34,12 @@ export class CheatPopup {
   private pattern: JumpPatternType;
   private shield: boolean;
   private magnet: boolean;
+  private guideLines: boolean;
 
   private patternLbl!: Phaser.GameObjects.Text;
   private shieldBtn!: Phaser.GameObjects.Text;
   private magnetBtn!: Phaser.GameObjects.Text;
+  private guideLinesBtn!: Phaser.GameObjects.Text;
 
   constructor(
     scene: Phaser.Scene,
@@ -49,6 +52,7 @@ export class CheatPopup {
     this.pattern = initial.pattern;
     this.shield = initial.startWithShield;
     this.magnet = initial.startWithMagnet;
+    this.guideLines = initial.showGuideLines;
 
     // ── dim overlay ──────────────────────────────────────────
     this.reg(
@@ -126,31 +130,42 @@ export class CheatPopup {
 
     // ── 자석 토글 ────────────────────────────────────────────
     this.reg(
-      scene.add.text(CX - 80, CY + 195, '자석 시작', {
+      scene.add.text(CX - 80, CY + 175, '자석 시작', {
         fontSize: '46px', color: '#ccddff',
       }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP),
     );
-    this.magnetBtn = this.makeToggleBtn(scene, CX + 120, CY + 195, this.magnet, () => {
+    this.magnetBtn = this.makeToggleBtn(scene, CX + 120, CY + 175, this.magnet, () => {
       this.magnet = !this.magnet;
       this.refreshToggle(this.magnetBtn, this.magnet);
+    });
+
+    // ── UI 가이드선 토글 ─────────────────────────────────────
+    this.reg(
+      scene.add.text(CX - 80, CY + 275, 'UI 가이드선 표시', {
+        fontSize: '46px', color: '#ccddff',
+      }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP),
+    );
+    this.guideLinesBtn = this.makeToggleBtn(scene, CX + 120, CY + 275, this.guideLines, () => {
+      this.guideLines = !this.guideLines;
+      this.refreshToggle(this.guideLinesBtn, this.guideLines);
     });
 
     // ── 구분선 2 ─────────────────────────────────────────────
     const divG2 = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPUP);
     divG2.lineStyle(1, 0x334466, 0.7);
     divG2.beginPath();
-    divG2.moveTo(CX - PANEL_W / 2 + 40, CY + 238);
-    divG2.lineTo(CX + PANEL_W / 2 - 40, CY + 238);
+    divG2.moveTo(CX - PANEL_W / 2 + 40, CY + 338);
+    divG2.lineTo(CX + PANEL_W / 2 - 40, CY + 338);
     divG2.strokePath();
     this.reg(divG2);
 
     // ── 미션 초기화 ──────────────────────────────────────────
     this.reg(
-      scene.add.text(CX - 80, CY + 300, '미션 초기화', {
+      scene.add.text(CX - 80, CY + 400, '미션 초기화', {
         fontSize: '46px', color: '#ffccaa',
       }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP),
     );
-    const resetBtn = scene.add.text(CX + 120, CY + 300, '초기화', {
+    const resetBtn = scene.add.text(CX + 120, CY + 400, '초기화', {
       fontSize: '44px', fontStyle: 'bold', color: '#ffffff',
       backgroundColor: '#883311', padding: { x: 32, y: 14 },
       fixedWidth: 160, align: 'center',
@@ -169,11 +184,11 @@ export class CheatPopup {
 
     // ── 부활 아이템 지급 ─────────────────────────────────────
     this.reg(
-      scene.add.text(CX - 80, CY + 390, '부활 아이템', {
+      scene.add.text(CX - 80, CY + 490, '부활 아이템', {
         fontSize: '46px', color: '#ddbbff',
       }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP),
     );
-    const revivalBtn = scene.add.text(CX + 120, CY + 390, '지급 (+1)', {
+    const revivalBtn = scene.add.text(CX + 120, CY + 490, '지급 (+1)', {
       fontSize: '44px', fontStyle: 'bold', color: '#ffffff',
       backgroundColor: '#553388', padding: { x: 32, y: 14 },
       fixedWidth: 200, align: 'center',
@@ -192,11 +207,11 @@ export class CheatPopup {
 
     // ── 출석 초기화 ──────────────────────────────────────────
     this.reg(
-      scene.add.text(CX - 80, CY + 460, '출석 초기화', {
+      scene.add.text(CX - 80, CY + 560, '출석 초기화', {
         fontSize: '46px', color: '#aaddcc',
       }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP),
     );
-    const attendanceResetBtn = scene.add.text(CX + 120, CY + 460, '초기화', {
+    const attendanceResetBtn = scene.add.text(CX + 120, CY + 560, '초기화', {
       fontSize: '44px', fontStyle: 'bold', color: '#ffffff',
       backgroundColor: '#226644', padding: { x: 32, y: 14 },
       fixedWidth: 160, align: 'center',
@@ -215,7 +230,7 @@ export class CheatPopup {
 
     // ── 닫기 버튼 ────────────────────────────────────────────
     this.reg(
-      scene.add.text(CX, CY + 545, '닫기', {
+      scene.add.text(CX, CY + 645, '닫기', {
         fontSize: '56px', fontStyle: 'bold', color: '#ffffff',
         backgroundColor: '#2a5a80', padding: { x: 80, y: 22 },
       }).setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.POPUP)
@@ -228,6 +243,7 @@ export class CheatPopup {
             pattern: this.pattern,
             startWithShield: this.shield,
             startWithMagnet: this.magnet,
+            showGuideLines: this.guideLines,
           });
           this.destroy();
         }),
