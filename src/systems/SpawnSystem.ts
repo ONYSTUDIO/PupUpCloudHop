@@ -35,7 +35,11 @@ export class SpawnSystem {
     private readonly baseWidth: number,
     private readonly baseHeight: number,
   ) {
-    this.nextSpawnY = initialTopY - SPAWN_CONFIG.CLOUD_SPACING_MIN;
+    this.nextSpawnY = initialTopY - (
+      SPAWN_CONFIG.CLOUD_SAFE_VISUAL_BOTTOM
+      + SPAWN_CONFIG.CLOUD_SAFE_VISUAL_TOP
+      + SPAWN_CONFIG.CLOUD_VERTICAL_GAP_MIN
+    );
     this.generatedPatternCount = initialPatternCount;
   }
 
@@ -187,10 +191,13 @@ export class SpawnSystem {
       cloudType: Phaser.Math.RND.pick(P1_TYPES),
     });
 
-    this.nextSpawnY -= Phaser.Math.Between(
-      SPAWN_CONFIG.CLOUD_SPACING_MIN,
-      SPAWN_CONFIG.CLOUD_SPACING_MAX,
-    );
+    // sprite bounds 기준 겹침 방지: 이전 구름 풍선 하단 ~ 다음 구름 이미지 상단 간격 보장
+    this.nextSpawnY -= SPAWN_CONFIG.CLOUD_SAFE_VISUAL_BOTTOM
+      + SPAWN_CONFIG.CLOUD_SAFE_VISUAL_TOP
+      + Phaser.Math.Between(
+        SPAWN_CONFIG.CLOUD_VERTICAL_GAP_MIN,
+        SPAWN_CONFIG.CLOUD_VERTICAL_GAP_MAX,
+      );
     this.generatedPatternCount++;
     return cloud;
   }
@@ -275,8 +282,14 @@ export class SpawnSystem {
       swirlGraphics,
     });
 
-    // 보텍스 상단(centerY - radiusY)에서 다음 구름까지 여유 간격 확보
-    this.nextSpawnY -= radiusY + Phaser.Math.Between(280, 320);
+    // 보텍스 상단(centerY - radiusY)에서 다음 구름까지 sprite bounds 기준 겹침 방지 간격
+    this.nextSpawnY -= radiusY
+      + SPAWN_CONFIG.CLOUD_SAFE_VISUAL_BOTTOM
+      + SPAWN_CONFIG.CLOUD_SAFE_VISUAL_TOP
+      + Phaser.Math.Between(
+        SPAWN_CONFIG.CLOUD_VERTICAL_GAP_MIN,
+        SPAWN_CONFIG.CLOUD_VERTICAL_GAP_MAX,
+      );
     this.generatedPatternCount++;
     this.cloudsSinceLastP2 = 0; // 쿨다운 리셋
     return clouds;

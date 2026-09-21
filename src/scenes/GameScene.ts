@@ -26,7 +26,7 @@ import { DirectionWheel } from '@ui/DirectionWheel';
 import { ActionPanel } from '@ui/ActionPanel';
 import { MetaIconPanel } from '@ui/MetaIconPanel';
 import { JumpPatternType } from '@game-types/game';
-import { SCENE_KEYS, DEPTH, EVENTS, INITIAL_CLOUD_LAYOUT, ITEM_CONFIG } from '@config/constants';
+import { SCENE_KEYS, DEPTH, EVENTS, buildInitialLayout, ITEM_CONFIG } from '@config/constants';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 import { GAMEPLAY } from '@config/gameplayConfig';
 import { UI_LAYOUT } from '@config/uiLayout';
@@ -169,7 +169,7 @@ export class GameScene extends Phaser.Scene {
     this.magnetPullTimer = 0;
     this.idleAnimTimer = 0;
     this.clouds = [];
-    this.currentCloudId = INITIAL_CLOUD_LAYOUT[0].id;
+    this.currentCloudId = 'c0';
     this.jumpedFromId = '';
     this.jumpTime = 0;
     this.landingOffsetX = 0;
@@ -447,8 +447,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createClouds(): void {
-    for (let i = 0; i < INITIAL_CLOUD_LAYOUT.length; i++) {
-      const cfg = INITIAL_CLOUD_LAYOUT[i]!;
+    const initialLayout = buildInitialLayout();
+
+    for (let i = 0; i < initialLayout.length; i++) {
+      const cfg = initialLayout[i]!;
       const cloud = new CloudIsland(this, cfg);
       this.clouds.push(cloud);
       this.movementSystem.register(cloud);
@@ -460,10 +462,10 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    const topCloud = INITIAL_CLOUD_LAYOUT[INITIAL_CLOUD_LAYOUT.length - 1]!;
+    const topCloud = initialLayout[initialLayout.length - 1]!;
     this.spawnSystem = new SpawnSystem(
       topCloud.centerY,
-      INITIAL_CLOUD_LAYOUT.length,
+      initialLayout.length,
       BASE_WIDTH,
       BASE_HEIGHT,
     );

@@ -1,3 +1,5 @@
+import type { CloudIslandConfig, CloudType } from '@game-types/game';
+
 export const SCENE_KEYS = {
   BOOT: 'BootScene',
   PRELOAD: 'PreloadScene',
@@ -71,9 +73,15 @@ export const SPAWN_CONFIG = {
   LOOKAHEAD: 2400,
   // 카메라 하단 기준 이 거리 아래 구름 제거
   DESPAWN_BUFFER: 500,
-  // 패턴 1 구름 수직 간격
-  CLOUD_SPACING_MIN: 280,
-  CLOUD_SPACING_MAX: 340,
+  // 구름섬 세로 간격 — 이전 구름 풍선 하단 ~ 다음 구름 섬 상단(이미지 기준) 추가 여유 간격
+  // 이 두 값이 0이어도 CLOUD_SAFE_VISUAL_BOTTOM + CLOUD_SAFE_VISUAL_TOP 만큼은 자동 확보됨
+  CLOUD_VERTICAL_GAP_MIN: 20,
+  CLOUD_VERTICAL_GAP_MAX: 70,
+  // 겹침 방지 정적 안전 버퍼 (궤도 최대 오프셋 + 스프라이트 시각 크기 최대 추정값)
+  // centerY ~ 풍선 하단: orbitRadiusY 최대 50 + balloonBottomLocalY 최대 ≈ 181 → 보수적 200
+  CLOUD_SAFE_VISUAL_BOTTOM: 200,
+  // centerY ~ 섬 이미지 상단: orbitRadiusY 최대 50 + islandH*ISLAND_ORIGIN_Y 최대 ≈ 156 → 보수적 185
+  CLOUD_SAFE_VISUAL_TOP: 185,
   // 패턴 2 회오리 궤도 크기
   VORTEX_RADIUS_X_MIN: 180,
   VORTEX_RADIUS_X_MAX: 240,
@@ -119,15 +127,86 @@ export const OBSTACLE_CONFIG = {
   STORM_HIT_DURATION_MS: 800,
 } as const;
 
-// 초기 구름섬 배치 — 프로토타입용 고정 레이아웃
-// world Y 는 0(상단) → 1920(하단). 플레이어는 아래서 위로 올라간다.
-export const INITIAL_CLOUD_LAYOUT = [
-  // centerY: ACTION_AREA_TOP(1680) - bottomGap(60) - orbitRadiusY(22) - balloon_tip_local(128) = 1470
-  // 풍선 꼭지(+128px)가 구름 body 하단(+36px)보다 훨씬 아래까지 내려오므로 balloon 기준으로 계산
-  { id: 'c0', centerX: 540, centerY: 1470, orbitRadiusX:  90, orbitRadiusY: 28, orbitSpeed: 0.55, startAngle: 0,              rotationDirection:  1 as const, width: 330, height: 80, cloudType: 'A' as const },
-  { id: 'c1', centerX: 260, centerY: 1360, orbitRadiusX: 120, orbitRadiusY: 40, orbitSpeed: 0.80, startAngle: Math.PI / 3,     rotationDirection: -1 as const, width: 280, height: 72, cloudType: 'B' as const },
-  { id: 'c2', centerX: 770, centerY: 1060, orbitRadiusX: 138, orbitRadiusY: 46, orbitSpeed: 0.70, startAngle: Math.PI,         rotationDirection:  1 as const, width: 295, height: 74, cloudType: 'C' as const },
-  { id: 'c3', centerX: 380, centerY:  760, orbitRadiusX: 108, orbitRadiusY: 35, orbitSpeed: 0.95, startAngle: Math.PI / 2,     rotationDirection: -1 as const, width: 260, height: 68, cloudType: 'D' as const },
-  { id: 'c4', centerX: 680, centerY:  460, orbitRadiusX: 125, orbitRadiusY: 42, orbitSpeed: 0.85, startAngle: Math.PI * 1.5,   rotationDirection:  1 as const, width: 265, height: 70, cloudType: 'A' as const },
-  { id: 'c5', centerX: 450, centerY:  170, orbitRadiusX:  85, orbitRadiusY: 28, orbitSpeed: 1.10, startAngle: Math.PI * 0.7,   rotationDirection: -1 as const, width: 245, height: 64, cloudType: 'B' as const },
-] as const;
+// ─── 초기 구름섬 레이아웃 생성 ─────────────────────────────────────────────
+// 매 게임 시작 시 buildInitialLayout()을 호출해 랜덤 배치를 생성한다.
+// 가로 3등분 룰(LEFT/CENTER/RIGHT), center 연속 방지, 세로 간격 모두 SpawnSystem과 동일 기준 적용.
+//
+// c0 위치 근거: ACTION_AREA_TOP(1680) - bottomGap(60) - orbitRadiusY(22) - balloonH(128) = 1470
+//   → c0 풍선 하단이 액션 패널 바로 위에 위치하도록 역산. c0는 매번 고정.
+
+const _CLOUD_TYPES: CloudType[] = ['A', 'B', 'C', 'D'];
+const _INITIAL_COUNT = 6;
+const _C0_Y   = 1470;
+const _C0_X   = 540;
+const _BW     = 1080; // BASE_WIDTH (순환 참조 없이 인라인)
+
+function _ri(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+export function buildInitialLayout(): CloudIslandConfig[] {
+  const layout: CloudIslandConfig[] = [];
+  let prevY    = _C0_Y;
+  let lastZone: 'left' | 'center' | 'right' = 'center'; // c0 고정 위치는 center
+
+  for (let i = 0; i < _INITIAL_COUNT; i++) {
+    if (i === 0) {
+      layout.push({
+        id: 'c0', centerX: _C0_X, centerY: _C0_Y,
+        orbitRadiusX: 90, orbitRadiusY: 28,
+        orbitSpeed: 0.55, startAngle: 0, rotationDirection: 1,
+        width: 330, height: 80, cloudType: 'A',
+      });
+      continue;
+    }
+
+    const width        = _ri(240, 310);
+    const orbitRadiusX = _ri(80, 145);
+    const orbitRadiusY = _ri(28, 50);
+    const margin       = orbitRadiusX + width / 2 + 30;
+    const lo           = Math.ceil(margin);
+    const hi           = Math.floor(_BW - margin);
+    const third        = _BW / 3;
+
+    let centerX: number;
+    if (lastZone === 'center') {
+      // center 연속 방지: 좌/우 존만 허용
+      const leftHi  = Math.min(Math.floor(third) - 1, hi);
+      const rightLo = Math.max(Math.ceil(third * 2) + 1, lo);
+      const canL = lo <= leftHi;
+      const canR = rightLo <= hi;
+      if (canL && canR) {
+        centerX = Math.random() < 0.5 ? _ri(lo, leftHi) : _ri(rightLo, hi);
+      } else if (canL) {
+        centerX = _ri(lo, leftHi);
+      } else if (canR) {
+        centerX = _ri(rightLo, hi);
+      } else {
+        centerX = _ri(lo, hi);
+      }
+    } else {
+      centerX = _ri(lo, hi);
+    }
+
+    lastZone = centerX < third ? 'left' : centerX > third * 2 ? 'right' : 'center';
+
+    // 세로 간격: SPAWN_CONFIG.CLOUD_SAFE_VISUAL_BOTTOM(200) + TOP(185) + 랜덤 여유(20~70)
+    prevY -= _ri(405, 455);
+
+    layout.push({
+      id: `c${i}`,
+      centerX,
+      centerY: prevY,
+      orbitRadiusX,
+      orbitRadiusY,
+      orbitSpeed:        0.55 + Math.random() * 0.55,
+      startAngle:        Math.random() * Math.PI * 2,
+      rotationDirection: (Math.random() < 0.5 ? 1 : -1) as (1 | -1),
+      width,
+      height:    _ri(60, 80),
+      cloudType: _CLOUD_TYPES[_ri(0, 3)]!,
+    });
+  }
+
+  return layout;
+}
