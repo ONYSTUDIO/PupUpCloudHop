@@ -36,6 +36,17 @@
 
 ---
 
+## 백엔드
+
+### Supabase
+- **이유**: BaaS(Backend as a Service)로 PostgreSQL DB + Auth + 실시간 쿼리를 제공. 1인 개발에서 서버 직접 구축 없이 로그인·DB 연동 가능.
+- **인증**: Google OAuth, 이메일/비밀번호, 게스트(익명) 로그인.
+- **DB 테이블**: `profiles`, `player_inventory`, `claimed_missions`, roulette 상태 등.
+- **사용 파일**: `src/lib/supabase.ts`, `src/services/AuthService.ts`, `ProfileService.ts`, `InventoryService.ts`, `MissionService.ts`
+- **버전**: 2.x (`@supabase/supabase-js`)
+
+---
+
 ## 코드 품질
 
 ### ESLint + Prettier
@@ -46,13 +57,13 @@
 
 ## 향후 추가 예정 기술
 
-| 기능 | 기술 후보 |
-|------|-----------|
-| 사운드 | Phaser Sound Manager + `.ogg` / `.mp3` |
-| 진동 | Capacitor Haptics 플러그인 |
-| 저장소 | Capacitor Preferences |
-| 광고 | AdMob Capacitor 플러그인 |
-| 인앱 결제 | Capacitor Purchases (RevenueCat) |
-| 리더보드 | Firebase Firestore 또는 자체 서버 |
-| 애니메이션 | Phaser Spritesheet + Texture Atlas |
-| 파티클 | Phaser Particle System |
+| 기능 | 기술 후보 | 상태 |
+|------|-----------|------|
+| 사운드 | Phaser Sound Manager + `.ogg` / `.mp3` | ✅ 구현됨 (`AudioManager`) |
+| 진동 | Capacitor Haptics 플러그인 | 🔲 미구현 |
+| 저장소 | Capacitor Preferences | 🔲 미구현 (현재 localStorage) |
+| 광고 | AdMob Capacitor 플러그인 | 🔲 미구현 |
+| 인앱 결제 | Capacitor Purchases (RevenueCat) | 🔲 미구현 |
+| 리더보드 | Supabase DB (profiles 테이블 기반) | 🔲 UI 미구현 |
+| 애니메이션 | Phaser Spritesheet + Texture Atlas | ✅ 구현됨 (캐릭터 스프라이트) |
+| 파티클 | Phaser Particle System | ✅ 구현됨 (착지·아이템 이펙트) |
