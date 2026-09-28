@@ -142,10 +142,10 @@ export class SpawnSystem {
   }
 
   private spawnPattern1(scene: Phaser.Scene): CloudIsland {
-    const width = Phaser.Math.Between(230, 310);
-    const height = Phaser.Math.Between(60, 75);
-    const orbitRadiusX = Phaser.Math.Between(80, 145);
-    const orbitRadiusY = Phaser.Math.Between(28, 50);
+    const width = Phaser.Math.Between(270, 360);
+    const height = Phaser.Math.Between(70, 88);
+    const orbitRadiusX = Phaser.Math.Between(95, 165);
+    const orbitRadiusY = Phaser.Math.Between(34, 60);
     const margin = orbitRadiusX + width / 2 + 30;
     const lo = Math.ceil(margin);
     const hi = Math.floor(this.baseWidth - margin);
@@ -224,8 +224,8 @@ export class SpawnSystem {
       SPAWN_CONFIG.VORTEX_RADIUS_Y_MAX,
     );
     const cloudCount = Phaser.Math.Between(2, 3) as 2 | 3;
-    const cloudWidth = Phaser.Math.Between(220, 270);
-    const cloudHeight = Phaser.Math.Between(62, 78);
+    const cloudWidth = Phaser.Math.Between(260, 320);
+    const cloudHeight = Phaser.Math.Between(72, 90);
     const halfCW = cloudWidth / 2;
 
     const minCX = radiusX + halfCW + 40;

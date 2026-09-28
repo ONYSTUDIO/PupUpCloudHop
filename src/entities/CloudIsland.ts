@@ -70,7 +70,7 @@ export class CloudIsland {
     // 이미지 상단 = -ISLAND_ORIGIN_Y * islandH (컨테이너 로컬)
     // 착지 표면  = 이미지 상단 + SURFACE_TOP_FRAC * islandH
     this._islandLocalTopY = -islandH * (ISLAND_ORIGIN_Y - SURFACE_TOP_FRAC);
-    this._islandHalfW     = islandW * 0.40;
+    this._islandHalfW     = islandW * 0.47;
 
     // ── 풍선 구역 계산 ────────────────────────────────────────
     const islandBottomLocalY   = islandH * (1 - ISLAND_ORIGIN_Y);

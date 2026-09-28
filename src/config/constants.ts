@@ -153,16 +153,16 @@ export function buildInitialLayout(): CloudIslandConfig[] {
     if (i === 0) {
       layout.push({
         id: 'c0', centerX: _C0_X, centerY: _C0_Y,
-        orbitRadiusX: 90, orbitRadiusY: 28,
+        orbitRadiusX: 105, orbitRadiusY: 34,
         orbitSpeed: 0.55, startAngle: 0, rotationDirection: 1,
-        width: 330, height: 80, cloudType: 'A',
+        width: 380, height: 92, cloudType: 'A',
       });
       continue;
     }
 
-    const width        = _ri(240, 310);
-    const orbitRadiusX = _ri(80, 145);
-    const orbitRadiusY = _ri(28, 50);
+    const width        = _ri(270, 360);
+    const orbitRadiusX = _ri(95, 165);
+    const orbitRadiusY = _ri(34, 60);
     const margin       = orbitRadiusX + width / 2 + 30;
     const lo           = Math.ceil(margin);
     const hi           = Math.floor(_BW - margin);
@@ -203,7 +203,7 @@ export function buildInitialLayout(): CloudIslandConfig[] {
       startAngle:        Math.random() * Math.PI * 2,
       rotationDirection: (Math.random() < 0.5 ? 1 : -1) as (1 | -1),
       width,
-      height:    _ri(60, 80),
+      height:    _ri(70, 92),
       cloudType: _CLOUD_TYPES[_ri(0, 3)]!,
     });
   }
