@@ -10,14 +10,25 @@ export class ObstacleSystem {
   private flocks: BirdFlock[] = [];
   private nextFlockTime: number;
   private birdsUnlocked: boolean = false;
+  private _birdIntervalMin: number = OBSTACLE_CONFIG.SPAWN_INTERVAL_MIN_MS;
+  private _birdIntervalMax: number = OBSTACLE_CONFIG.SPAWN_INTERVAL_MAX_MS;
 
   // ── 번개 폭풍 ───────────────────────────────────────────
   private storm: LightningStorm | null = null;
   private nextStormTime: number;
   private stormUnlocked: boolean = false;
+  private _stormIntervalMin: number = OBSTACLE_CONFIG.STORM_SPAWN_INTERVAL_MIN_MS;
+  private _stormIntervalMax: number = OBSTACLE_CONFIG.STORM_SPAWN_INTERVAL_MAX_MS;
+
+  // ── 전역 쿨다운 (새떼·번개 동시 등장 방지) ─────────────
+  private static readonly GLOBAL_COOLDOWN_MS = 5000;
 
   // ── 동결 상태 (얼음 아이템 효과) ────────────────────────
   private _isFrozen: boolean = false;
+
+  // ── 첫 등장 콜백 ────────────────────────────────────────
+  private _onFirstBirdUnlock?: () => void;
+  private _onFirstStormUnlock?: () => void;
 
   /**
    * @param now - 씬 생성 시점의 this.time.now
@@ -29,12 +40,35 @@ export class ObstacleSystem {
     this.nextStormTime = now + OBSTACLE_CONFIG.STORM_FIRST_SPAWN_DELAY_MS;
   }
 
+  /**
+   * 첫 장애물 등장 시 호출할 콜백을 설정한다.
+   * GameScene에서 경고 UI를 표시하는 데 사용.
+   */
+  setFirstUnlockCallbacks(onBird: () => void, onStorm: () => void): void {
+    this._onFirstBirdUnlock = onBird;
+    this._onFirstStormUnlock = onStorm;
+  }
+
+  /**
+   * D 기반 스폰 간격을 갱신한다.
+   * GameScene이 착지 시마다 호출하면 된다.
+   */
+  setSpawnIntervals(
+    birdMin: number, birdMax: number,
+    stormMin: number, stormMax: number,
+  ): void {
+    this._birdIntervalMin  = birdMin;
+    this._birdIntervalMax  = birdMax;
+    this._stormIntervalMin = stormMin;
+    this._stormIntervalMax = stormMax;
+  }
+
   freeze(): void   { this._isFrozen = true; }
   unfreeze(): void { this._isFrozen = false; }
 
   // ── 새떼 업데이트 ────────────────────────────────────────
 
-  update(delta: number, now: number, cameraScrollY: number, score: number): void {
+  update(delta: number, now: number, cameraScrollY: number, landings: number): void {
     if (this._isFrozen) {
       // 스폰 타이머를 동결 시간만큼 밀어 해제 후 즉시 스폰 방지
       this.nextFlockTime += delta;
@@ -43,24 +77,30 @@ export class ObstacleSystem {
       return;
     }
 
-    // 점수 미달 시 스폰 타이머를 밀어 해금 직후 즉시 스폰 방지
-    if (score < OBSTACLE_CONFIG.BIRD_UNLOCK_SCORE) {
+    // 착지 횟수 미달 시 스폰 타이머를 밀어 해금 직후 즉시 스폰 방지
+    if (landings < OBSTACLE_CONFIG.BIRD_UNLOCK_LANDINGS) {
       this.nextFlockTime += delta;
       for (const flock of this.flocks) flock.update(delta);
       return;
     }
 
-    // 새떼 첫 해금 시 유예 타이머 세팅
+    // 새떼 첫 해금 시 유예 타이머 세팅 + 경고 콜백
     if (!this.birdsUnlocked) {
       this.birdsUnlocked = true;
       this.nextFlockTime = now + OBSTACLE_CONFIG.BIRD_UNLOCK_DELAY_MS;
+      this._onFirstBirdUnlock?.();
     }
 
     if (now >= this.nextFlockTime) {
       this.spawnBirdFlock(cameraScrollY);
+      // 번개 쿨다운 적용 (새떼·번개 5초 이내 동시 등장 방지)
+      this.nextStormTime = Math.max(
+        this.nextStormTime,
+        now + ObstacleSystem.GLOBAL_COOLDOWN_MS,
+      );
       this.nextFlockTime = now + Phaser.Math.Between(
-        OBSTACLE_CONFIG.SPAWN_INTERVAL_MIN_MS,
-        OBSTACLE_CONFIG.SPAWN_INTERVAL_MAX_MS,
+        Math.round(this._birdIntervalMin),
+        Math.round(this._birdIntervalMax),
       );
     }
 
@@ -84,7 +124,7 @@ export class ObstacleSystem {
     now: number,
     cameraScrollY: number,
     currentCloud: CloudIsland | null,
-    score: number,
+    landings: number,
   ): string | null {
     if (this._isFrozen) {
       // 스폰 타이머 밀기
@@ -96,23 +136,29 @@ export class ObstacleSystem {
 
     // 폭풍 없음 → 스폰 여부 확인
     if (this.storm === null) {
-      // 점수 미달 시 스폰 타이머를 밀어 해금 직후 즉시 스폰 방지
-      if (score < OBSTACLE_CONFIG.STORM_UNLOCK_SCORE) {
+      // 착지 횟수 미달 시 스폰 타이머를 밀어 해금 직후 즉시 스폰 방지
+      if (landings < OBSTACLE_CONFIG.STORM_UNLOCK_LANDINGS) {
         this.nextStormTime += delta;
         return null;
       }
 
-      // 번개 첫 해금 시 유예 타이머 세팅 (기존 STORM_FIRST_SPAWN_DELAY_MS 재활용)
+      // 번개 첫 해금 시 유예 타이머 세팅 + 경고 콜백
       if (!this.stormUnlocked) {
         this.stormUnlocked = true;
         this.nextStormTime = now + OBSTACLE_CONFIG.STORM_FIRST_SPAWN_DELAY_MS;
+        this._onFirstStormUnlock?.();
       }
 
       if (now >= this.nextStormTime) {
         this.storm = new LightningStorm(this.scene);
+        // 새떼 쿨다운 적용 (새떼·번개 5초 이내 동시 등장 방지)
+        this.nextFlockTime = Math.max(
+          this.nextFlockTime,
+          now + ObstacleSystem.GLOBAL_COOLDOWN_MS,
+        );
         this.nextStormTime = now + Phaser.Math.Between(
-          OBSTACLE_CONFIG.STORM_SPAWN_INTERVAL_MIN_MS,
-          OBSTACLE_CONFIG.STORM_SPAWN_INTERVAL_MAX_MS,
+          Math.round(this._stormIntervalMin),
+          Math.round(this._stormIntervalMax),
         );
       }
       return null;

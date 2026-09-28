@@ -30,6 +30,7 @@ import { SCENE_KEYS, DEPTH, EVENTS, buildInitialLayout, ITEM_CONFIG } from '@con
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 import { GAMEPLAY } from '@config/gameplayConfig';
 import { UI_LAYOUT } from '@config/uiLayout';
+import { getDifficultyParams, calcDifficulty, type DifficultyParams } from '@config/difficultyConfig';
 
 // ─── 버튼 컨트롤 크기 상수 ───────────────────────────────────
 const JUMP_BTN_RADIUS  = 120;
@@ -137,6 +138,12 @@ export class GameScene extends Phaser.Scene {
 
   private _onVisibilityChange: (() => void) | null = null;
 
+  // 난이도 파라미터 (착지 시마다 갱신)
+  private currentDiffParams!: DifficultyParams;
+
+  // DEV 전용 — 착지 수 / D값 오버레이 텍스트
+  private _devDiffText: Phaser.GameObjects.Text | null = null;
+
   constructor() {
     super({ key: SCENE_KEYS.GAME });
   }
@@ -184,6 +191,19 @@ export class GameScene extends Phaser.Scene {
     this.scoreSystem = new ScoreSystem(this, this.saveManager.getBestScore());
     this.events.on(EVENTS.BIG_JUMP, this.onBigJump, this);
     this.events.on(EVENTS.MILESTONE, this.onMilestone, this);
+
+    // DEV: ?startLandings=N URL 파라미터로 중후반 난이도 바로 테스트
+    if (import.meta.env.DEV) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const startLandings = parseInt(urlParams.get('startLandings') ?? '0', 10) || 0;
+      if (startLandings > 0) {
+        this.scoreSystem.setLandingCount(startLandings);
+      }
+    }
+
+    // 초기 diffParams (착지 횟수 기준, DEV startLandings 반영)
+    this.currentDiffParams = getDifficultyParams(this.scoreSystem.getLandingCount());
+
     this.obstacleSystem = new ObstacleSystem(this, this.time.now);
     this.starItemSystem = new StarItemSystem(this);
     this.magnetItemSystem = new MagnetItemSystem(this);
@@ -209,9 +229,27 @@ export class GameScene extends Phaser.Scene {
     this.createPlayer();
     this.setupUILayers();
     this.setupBottomControls();
+    // 초기 진자 속도를 D=0 값으로 설정 (휠은 setupBottomControls에서 생성됨)
+    this.directionWheel.setBaseOscillationSpeed(this.currentDiffParams.oscillationSpeed);
     this.setupInput();
     this.setupCamera();
     this.setupVisibilityPause();
+
+    // 장애물 첫 등장 경고 콜백 등록
+    this.obstacleSystem.setFirstUnlockCallbacks(
+      () => this.showObstacleWarning('새떼 등장 주의!'),
+      () => this.showObstacleWarning('번개 폭풍 등장 주의!'),
+    );
+
+    // DEV: 착지 수 / D값 오버레이
+    if (import.meta.env.DEV) {
+      this._devDiffText = this.add.text(12, BASE_HEIGHT - 60, '', {
+        fontSize: '26px', color: '#00ffcc',
+        backgroundColor: '#00000066',
+        padding: { x: 6, y: 3 },
+      }).setScrollFactor(0).setDepth(DEPTH.POPUP + 1);
+      this.updateDevDiffDisplay();
+    }
 
     // 치트 설정 적용
     if (data?.startWithShield) {
@@ -309,15 +347,15 @@ export class GameScene extends Phaser.Scene {
     }
 
     // 3. 장애물 업데이트 (새떼 + 번개)
-    const currentScore = this.scoreSystem.getScore().current;
-    this.obstacleSystem.update(delta, this.time.now, scrollY, currentScore);
+    const currentLandings = this.scoreSystem.getLandingCount();
+    this.obstacleSystem.update(delta, this.time.now, scrollY, currentLandings);
     this.checkObstacleCollisions();
 
     const currentCloud = this.player.isOnGround
       ? (this.clouds.find((c) => c.id === this.currentCloudId) ?? null)
       : null;
     const stormHitId = this.obstacleSystem.updateStorm(
-      delta, this.time.now, scrollY, currentCloud, currentScore,
+      delta, this.time.now, scrollY, currentCloud, currentLandings,
     );
     if (stormHitId !== null) {
       // 방어막이 활성 상태이고 플레이어가 탑승 중인 구름이 번개에 맞은 경우 → 방어막 소모로 무효화
@@ -469,11 +507,13 @@ export class GameScene extends Phaser.Scene {
       BASE_WIDTH,
       BASE_HEIGHT,
     );
+    // 초기 레이아웃 마지막 구름(c5) 정보 주입 — 첫 자동 스폰 시 minΔX 검사에 사용
+    this.spawnSystem.setLastP1Info(topCloud.centerX, topCloud.width);
 
     const initialScrollY = 0;
     let safetyLimit = 30;
     while (this.spawnSystem.needsSpawn(initialScrollY) && safetyLimit-- > 0) {
-      const batch = this.spawnSystem.spawnNext(this);
+      const batch = this.spawnSystem.spawnNext(this, this.currentDiffParams);
       for (const cloud of batch) {
         this.clouds.push(cloud);
         this.movementSystem.register(cloud);
@@ -862,7 +902,7 @@ export class GameScene extends Phaser.Scene {
 
     let spawnsThisFrame = 0;
     while (this.spawnSystem.needsSpawn(scrollY) && spawnsThisFrame < 2) {
-      const batch = this.spawnSystem.spawnNext(this);
+      const batch = this.spawnSystem.spawnNext(this, this.currentDiffParams);
       for (const cloud of batch) {
         this.clouds.push(cloud);
         this.movementSystem.register(cloud);
@@ -955,8 +995,14 @@ export class GameScene extends Phaser.Scene {
     // physics fall 중에는 하강 중일 때만 착지 허용
     const requireFalling = this._physicsGravity;
 
+    // D 기반 기본 tolerance — 자석·기타 아이템 보정의 밑바탕
+    const baseTolY = this.currentDiffParams.landToleranceY;
+    const baseTolX = this.currentDiffParams.landToleranceX; // 항상 6px
+
     if (this.magnetSystem.isActive) {
-      // 자석 활성: 확장된 범위에 닿으면 즉시 착지 대신 당기기 시작
+      // 자석: D 기반 기본값 위에 자석 배율/오프셋을 얹음
+      const magnetTolY = baseTolY * ITEM_CONFIG.MAGNET_TOLERANCE_MULT;
+      const magnetTolX = baseTolX + ITEM_CONFIG.MAGNET_TOLERANCE_X;
       const magnetTarget = this.collisionSystem.check(
         this.player,
         this.clouds,
@@ -964,15 +1010,15 @@ export class GameScene extends Phaser.Scene {
         this.jumpTime,
         this.time.now,
         requireFalling,
-        this.magnetSystem.landToleranceY,
-        this.magnetSystem.landToleranceX,
+        magnetTolY,
+        magnetTolX,
       );
       if (magnetTarget !== null) {
         this.startMagnetPull(magnetTarget);
         return;
       }
     } else {
-      // 자석 비활성: 기존 즉시 착지
+      // 자석 비활성: D 기반 tolerance 직접 사용
       const landed = this.collisionSystem.check(
         this.player,
         this.clouds,
@@ -980,6 +1026,8 @@ export class GameScene extends Phaser.Scene {
         this.jumpTime,
         this.time.now,
         requireFalling,
+        baseTolY,
+        baseTolX,
       );
       if (landed !== null) {
         this.handleLand(landed);
@@ -1219,6 +1267,18 @@ export class GameScene extends Phaser.Scene {
 
     if (cloud.id !== prevId) {
       this.scoreSystem.onLand(cloud.topY, cloud.x);
+
+      // 착지 횟수가 늘었으므로 D 재계산 → 진자 속도·스폰 간격·판정 갱신
+      const landings = this.scoreSystem.getLandingCount();
+      this.currentDiffParams = getDifficultyParams(landings);
+      this.directionWheel.setBaseOscillationSpeed(this.currentDiffParams.oscillationSpeed);
+      this.obstacleSystem.setSpawnIntervals(
+        this.currentDiffParams.birdSpawnIntervalMin,
+        this.currentDiffParams.birdSpawnIntervalMax,
+        this.currentDiffParams.stormSpawnIntervalMin,
+        this.currentDiffParams.stormSpawnIntervalMax,
+      );
+      if (import.meta.env.DEV) this.updateDevDiffDisplay();
     }
 
     // 별 착지 수집 — 해당 구름에 별이 있으면 로켓 모드 발동
@@ -2049,6 +2109,54 @@ export class GameScene extends Phaser.Scene {
 
   // ─── 씬 정리 ───────────────────────────────────────────
 
+  // ─── 장애물 첫 등장 경고 UI ─────────────────────────────
+  private showObstacleWarning(text: string): void {
+    const cx = BASE_WIDTH / 2;
+    const cy = BASE_HEIGHT * 0.25;
+
+    const label = this.add
+      .text(cx, cy, `⚠ ${text}`, {
+        fontSize: '56px',
+        fontStyle: 'bold',
+        color: '#ffee00',
+        stroke: '#aa4400',
+        strokeThickness: 7,
+        backgroundColor: '#00000088',
+        padding: { x: 32, y: 16 },
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.HUD + 3)
+      .setAlpha(0);
+
+    this.tweens.add({
+      targets: label,
+      alpha: 1,
+      duration: 250,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.time.delayedCall(1500, () => {
+          this.tweens.add({
+            targets: label,
+            alpha: 0,
+            y: cy - 60,
+            duration: 500,
+            ease: 'Sine.easeIn',
+            onComplete: () => label.destroy(),
+          });
+        });
+      },
+    });
+  }
+
+  // ─── DEV: 착지 수 / D값 오버레이 갱신 ───────────────────
+  private updateDevDiffDisplay(): void {
+    if (!this._devDiffText) return;
+    const landings = this.scoreSystem.getLandingCount();
+    const D = calcDifficulty(landings);
+    this._devDiffText.setText(`L:${landings}  D:${D.toFixed(3)}`);
+  }
+
   shutdown(): void {
     this.events.off(EVENTS.BIG_JUMP, this.onBigJump, this);
     this.events.off(EVENTS.MILESTONE, this.onMilestone, this);
@@ -2056,6 +2164,8 @@ export class GameScene extends Phaser.Scene {
       document.removeEventListener('visibilitychange', this._onVisibilityChange);
       this._onVisibilityChange = null;
     }
+    this._devDiffText?.destroy();
+    this._devDiffText = null;
     this.topHud?.destroy();
     this.scoreHud?.destroy();
     this.pausePopup?.destroy();

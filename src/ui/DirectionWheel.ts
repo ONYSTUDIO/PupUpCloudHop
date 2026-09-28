@@ -24,7 +24,7 @@ export class DirectionWheel {
   // — oscillate mode —
   private _isOscillating: boolean = false;
   private _oscillationTime: number = 0;
-  private readonly OSCILLATION_SPEED = Math.PI * 0.8; // ~2.5s 한 사이클
+  private OSCILLATION_SPEED = Math.PI * 0.8; // ~2.5s 한 사이클 (difficultyConfig로 override됨)
 
   // — drag mode —
   private activePointerId: number = -1;
@@ -100,6 +100,16 @@ export class DirectionWheel {
   /** 진자 재개 (멈춘 지점에서 이어서) */
   resume(): void {
     if (this.mode === 'oscillate') this._isOscillating = true;
+  }
+
+  /**
+   * 진자 기본 각속도를 갱신한다.
+   * difficultyConfig의 D 기반 값을 착지 시마다 전달하면 된다.
+   * 타임슬로우 효과는 GameScene에서 wheelDelta를 줄여 적용하므로
+   * 이 메서드는 슬로우 배율을 고려하지 않아도 된다.
+   */
+  setBaseOscillationSpeed(speed: number): void {
+    this.OSCILLATION_SPEED = speed;
   }
 
   // ─── drag 모드 전용 ────────────────────────────────────────

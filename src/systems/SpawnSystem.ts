@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { CloudIsland } from '@entities/CloudIsland';
 import { CloudPatternType, type CloudType } from '@game-types/game';
 import { DEPTH, SPAWN_CONFIG } from '@config/constants';
+import { type DifficultyParams } from '@config/difficultyConfig';
 
 const P1_TYPES: CloudType[] = ['A', 'B', 'C', 'D'];
 const P2_TYPES: CloudType[] = ['B', 'D'];
@@ -28,6 +29,9 @@ export class SpawnSystem {
   private cloudsSinceLastP2: number = SPAWN_CONFIG.PATTERN_2_MIN_GAP;
   // 중앙 구름 연속 방지: 직전 패턴 1 구름의 수평 존
   private lastP1Zone: 'left' | 'center' | 'right' = 'left';
+  // 직전 P1 구름 X/width — 최소 수평 거리 검사에 사용 (0 = 이전 구름 없음)
+  private _lastP1CenterX: number = 0;
+  private _lastP1Width: number = 0;
 
   constructor(
     initialTopY: number,
@@ -47,11 +51,17 @@ export class SpawnSystem {
     return this.nextSpawnY > cameraScrollY - SPAWN_CONFIG.LOOKAHEAD;
   }
 
+  /** 초기 레이아웃 마지막 구름 정보를 주입 — 첫 자동 스폰 시 겹침 방지에 사용 */
+  setLastP1Info(centerX: number, width: number): void {
+    this._lastP1CenterX = centerX;
+    this._lastP1Width   = width;
+  }
+
   /** 다음 패턴을 생성하고 포함된 구름 목록을 반환한다 */
-  spawnNext(scene: Phaser.Scene): CloudIsland[] {
+  spawnNext(scene: Phaser.Scene, diffParams: DifficultyParams): CloudIsland[] {
     if (this.generatedPatternCount < SPAWN_CONFIG.PATTERN_THRESHOLD) {
       this.cloudsSinceLastP2++;
-      return [this.spawnPattern1(scene)];
+      return [this.spawnPattern1(scene, diffParams)];
     }
 
     const canTryP2 =
@@ -59,11 +69,11 @@ export class SpawnSystem {
       Phaser.Math.FloatBetween(0, 1) < SPAWN_CONFIG.PATTERN_2_CHANCE;
 
     if (canTryP2) {
-      return this.trySpawnPattern2(scene);
+      return this.trySpawnPattern2(scene, diffParams);
     }
 
     this.cloudsSinceLastP2++;
-    return [this.spawnPattern1(scene)];
+    return [this.spawnPattern1(scene, diffParams)];
   }
 
   /** 매 프레임 회오리 그룹의 회전 각도를 갱신하고 구름 위치를 계산한다 */
@@ -141,11 +151,11 @@ export class SpawnSystem {
     return 'center';
   }
 
-  private spawnPattern1(scene: Phaser.Scene): CloudIsland {
-    const width = Phaser.Math.Between(270, 360);
-    const height = Phaser.Math.Between(70, 88);
-    const orbitRadiusX = Phaser.Math.Between(95, 165);
-    const orbitRadiusY = Phaser.Math.Between(34, 60);
+  private spawnPattern1(scene: Phaser.Scene, diffParams: DifficultyParams): CloudIsland {
+    const width        = Phaser.Math.Between(Math.round(diffParams.cloudWidthMin),    Math.round(diffParams.cloudWidthMax));
+    const height       = Phaser.Math.Between(70, 88);
+    const orbitRadiusX = Phaser.Math.Between(Math.round(diffParams.orbitRadiusXMin), Math.round(diffParams.orbitRadiusXMax));
+    const orbitRadiusY = Phaser.Math.Between(Math.round(diffParams.orbitRadiusYMin), Math.round(diffParams.orbitRadiusYMax));
     const margin = orbitRadiusX + width / 2 + 30;
     const lo = Math.ceil(margin);
     const hi = Math.floor(this.baseWidth - margin);
@@ -174,6 +184,22 @@ export class SpawnSystem {
     } else {
       centerX = Phaser.Math.Between(lo, hi);
     }
+
+    // ── 직전 P1 구름과 최소 수평 거리 보장 (0.6 × 평균 폭) ──────────────
+    if (this._lastP1Width > 0) {
+      const minDeltaX = (width + this._lastP1Width) / 2 * 0.6;
+      let retries = 0;
+      while (Math.abs(centerX - this._lastP1CenterX) < minDeltaX && retries < 5) {
+        centerX = Phaser.Math.Between(lo, hi);
+        retries++;
+      }
+      if (import.meta.env.DEV && Math.abs(centerX - this._lastP1CenterX) < minDeltaX) {
+        console.warn(
+          `[SpawnSystem] P1 minΔX 미충족: |${centerX}−${this._lastP1CenterX}|=` +
+          `${Math.abs(centerX - this._lastP1CenterX).toFixed(0)} < ${minDeltaX.toFixed(0)}`,
+        );
+      }
+    }
     this.lastP1Zone = this.getP1Zone(centerX);
 
     const cloud = new CloudIsland(scene, {
@@ -182,7 +208,7 @@ export class SpawnSystem {
       centerY: this.nextSpawnY,
       orbitRadiusX,
       orbitRadiusY,
-      orbitSpeed: Phaser.Math.FloatBetween(0.55, 1.1),
+      orbitSpeed: Phaser.Math.FloatBetween(diffParams.orbitSpeedP1Min, diffParams.orbitSpeedP1Max),
       startAngle: Phaser.Math.FloatBetween(0, Math.PI * 2),
       rotationDirection: Phaser.Math.RND.pick([1, -1]) as 1 | -1,
       width,
@@ -199,45 +225,53 @@ export class SpawnSystem {
         SPAWN_CONFIG.CLOUD_VERTICAL_GAP_MAX,
       );
     this.generatedPatternCount++;
+    this._lastP1CenterX = centerX;
+    this._lastP1Width   = width;
     return cloud;
   }
 
   // ─── 패턴 2 ────────────────────────────────────────────
 
-  private trySpawnPattern2(scene: Phaser.Scene): CloudIsland[] {
+  private trySpawnPattern2(scene: Phaser.Scene, diffParams: DifficultyParams): CloudIsland[] {
     for (let attempt = 0; attempt < SPAWN_CONFIG.MAX_PATTERN_CREATE_RETRY; attempt++) {
-      const result = this.tryCreateVortexGroup(scene);
+      const result = this.tryCreateVortexGroup(scene, diffParams);
       if (result !== null) return result;
     }
     // 배치 실패 시 패턴 1로 대체 (쿨다운 카운터 유지)
     this.cloudsSinceLastP2++;
-    return [this.spawnPattern1(scene)];
+    return [this.spawnPattern1(scene, diffParams)];
   }
 
-  private tryCreateVortexGroup(scene: Phaser.Scene): CloudIsland[] | null {
-    const radiusX = Phaser.Math.Between(
-      SPAWN_CONFIG.VORTEX_RADIUS_X_MIN,
-      SPAWN_CONFIG.VORTEX_RADIUS_X_MAX,
-    );
-    const radiusY = Phaser.Math.Between(
-      SPAWN_CONFIG.VORTEX_RADIUS_Y_MIN,
-      SPAWN_CONFIG.VORTEX_RADIUS_Y_MAX,
-    );
+  private tryCreateVortexGroup(scene: Phaser.Scene, diffParams: DifficultyParams): CloudIsland[] | null {
     const cloudCount = Phaser.Math.Between(2, 3) as 2 | 3;
-    const cloudWidth = Phaser.Math.Between(260, 320);
-    const cloudHeight = Phaser.Math.Between(72, 90);
-    const halfCW = cloudWidth / 2;
+    const cloudWidth = Phaser.Math.Between(220, 260);
+    // P2 타입(B/D) 최대 종횡비 0.655 기준 — B(0.643)는 약간 여유 있게 계산됨
+    const cloudHeight = Math.round(cloudWidth * 0.655);
 
+    // 어느 회전 각도에서도 AABB 겹침이 없으려면:
+    // ((W+margin)/(k·Rx))² + ((H+margin)/(k·Ry))² ≤ 1  (50/50 예산 배분)
+    //   k = 2·sin(π/n), Rx_min = (W+margin)·√2/k, Ry_min = (H+margin)·√2/k
+    const k = 2 * Math.sin(Math.PI / cloudCount);
+    const m = SPAWN_CONFIG.VORTEX_OVERLAP_MARGIN;
+    const rxMin = (cloudWidth  + m) * Math.SQRT2 / k;
+    const ryMin = (cloudHeight + m) * Math.SQRT2 / k;
+    // 최솟값 대비 5~15% 여유
+    const radiusX = Math.round(rxMin * Phaser.Math.FloatBetween(1.05, 1.15));
+    const radiusY = Math.round(ryMin * Phaser.Math.FloatBetween(1.05, 1.15));
+
+    const halfCW = cloudWidth / 2;
     const minCX = radiusX + halfCW + 40;
     const maxCX = this.baseWidth - radiusX - halfCW - 40;
     if (minCX >= maxCX) return null;
 
     const centerX = Phaser.Math.Between(Math.ceil(minCX), Math.floor(maxCX));
-    // 추가 간격: 보텍스 하단 구름(centerY + radiusY)이 이전 구름과 충분히 떨어지도록
-    this.nextSpawnY -= SPAWN_CONFIG.PATTERN_2_ENTRY_EXTRA;
+    // 동적 진입 간격: 이전 구름 ~ 보텍스 하단(centerY + radiusY) 충분히 이격
+    this.nextSpawnY -= radiusY + SPAWN_CONFIG.PATTERN_2_ENTRY_EXTRA_BASE;
     const centerY = this.nextSpawnY;
     const direction = Phaser.Math.RND.pick([1, -1]) as 1 | -1;
-    const speed = Phaser.Math.FloatBetween(0.45, 0.75);
+    // 각속도 보정: 반지름이 커져도 시각적 호속(arc speed)이 일정하도록 omega × (ref/Ry)
+    const omega = Phaser.Math.FloatBetween(diffParams.orbitSpeedP2Min, diffParams.orbitSpeedP2Max);
+    const speed = omega * (SPAWN_CONFIG.VORTEX_SPEED_REF_RY / radiusY);
     const angleOffset = Phaser.Math.FloatBetween(0, Math.PI * 2);
     const groupId = `vg${this.cloudIdCounter++}`;
 
@@ -265,6 +299,28 @@ export class SpawnSystem {
           cloudType: p2Type,
         }),
       );
+    }
+
+    // DEV: 360단계 AABB 겹침 검증
+    if (import.meta.env.DEV) {
+      checkLoop: for (let s = 0; s < 360; s++) {
+        const ga = (s / 360) * Math.PI * 2;
+        for (let i = 0; i < cloudCount; i++) {
+          for (let j = i + 1; j < cloudCount; j++) {
+            const oi = angleOffset + i * ((Math.PI * 2) / cloudCount);
+            const oj = angleOffset + j * ((Math.PI * 2) / cloudCount);
+            const dx = Math.abs((Math.cos(ga + oi) - Math.cos(ga + oj)) * radiusX);
+            const dy = Math.abs((Math.sin(ga + oi) - Math.sin(ga + oj)) * radiusY);
+            if (dx < cloudWidth && dy < cloudHeight) {
+              console.warn(
+                `[SpawnSystem] P2 overlap n=${cloudCount} W=${cloudWidth} ` +
+                `Rx=${radiusX} Ry=${radiusY} at step=${s}`,
+              );
+              break checkLoop;
+            }
+          }
+        }
+      }
     }
 
     const swirlGraphics = this.drawVortexIndicator(scene, centerX, centerY, radiusX, radiusY);

@@ -91,6 +91,11 @@ export class ScoreSystem {
     return this.landingCount;
   }
 
+  /** DEV 전용: 착지 횟수를 강제 설정 (?startLandings URL 파라미터용) */
+  setLandingCount(n: number): void {
+    this.landingCount = Math.max(0, n);
+  }
+
   getAchievedMilestoneCount(): number {
     return this.achievedMilestoneCount;
   }

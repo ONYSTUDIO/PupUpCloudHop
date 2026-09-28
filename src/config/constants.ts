@@ -1,4 +1,5 @@
 import type { CloudIslandConfig, CloudType } from '@game-types/game';
+import { EARLY_ORBIT, EARLY_LAYOUT } from '@config/difficultyConfig';
 
 export const SCENE_KEYS = {
   BOOT: 'BootScene',
@@ -82,11 +83,6 @@ export const SPAWN_CONFIG = {
   CLOUD_SAFE_VISUAL_BOTTOM: 200,
   // centerY ~ 섬 이미지 상단: orbitRadiusY 최대 50 + islandH*ISLAND_ORIGIN_Y 최대 ≈ 156 → 보수적 185
   CLOUD_SAFE_VISUAL_TOP: 185,
-  // 패턴 2 회오리 궤도 크기
-  VORTEX_RADIUS_X_MIN: 180,
-  VORTEX_RADIUS_X_MAX: 240,
-  VORTEX_RADIUS_Y_MIN: 80,
-  VORTEX_RADIUS_Y_MAX: 120,
   // 이 수 이상 패턴 생성 후 패턴 2 허용
   PATTERN_THRESHOLD: 5,
   // 패턴 2 배치 실패 시 재시도 횟수
@@ -95,16 +91,20 @@ export const SPAWN_CONFIG = {
   PATTERN_2_CHANCE: 0.30,
   // 패턴 2 이후 최소 패턴 1 개수 (연속 방지 + 호흡 구간 확보)
   PATTERN_2_MIN_GAP: 3,
-  // 패턴 2 진입 시 추가 Y 간격 (보텍스 하단 구름이 이전 구름과 충분히 떨어지도록)
-  PATTERN_2_ENTRY_EXTRA: 130,
+  // 패턴 2 겹침 방지 여유 (cloudWidth/Height에 더하는 마진, px)
+  VORTEX_OVERLAP_MARGIN: 40,
+  // 각속도 보정 기준 반지름 Y (px) — omega × (ref/actualRy)로 시각 호속 일정 유지
+  VORTEX_SPEED_REF_RY: 160,
+  // 패턴 2 진입 추가 Y 간격 고정 분 (실제 간격 = radiusY + this, px)
+  PATTERN_2_ENTRY_EXTRA_BASE: 30,
 } as const;
 
 // 장애물 설정
 export const OBSTACLE_CONFIG = {
-  // 점수 기반 해금 임계값
-  BIRD_UNLOCK_SCORE: 10,
-  STORM_UNLOCK_SCORE: 30,
-  // 해금 직후 첫 스폰까지 유예 시간
+  // 착지 횟수 기반 해금 임계값 (점수 기반에서 변경)
+  BIRD_UNLOCK_LANDINGS:  25,  // 이전: 점수 10점
+  STORM_UNLOCK_LANDINGS: 50,  // 이전: 점수 30점
+  // 해금 직후 첫 스폰까지 유예 시간 (이 시간 동안 경고 표시)
   BIRD_UNLOCK_DELAY_MS: 3000,
   // 새떼
   BIRD_FLOCK_HALF_W: 140,
@@ -148,25 +148,57 @@ export function buildInitialLayout(): CloudIslandConfig[] {
   const layout: CloudIslandConfig[] = [];
   let prevY    = _C0_Y;
   let lastZone: 'left' | 'center' | 'right' = 'center'; // c0 고정 위치는 center
+  const third  = _BW / 3;
 
   for (let i = 0; i < _INITIAL_COUNT; i++) {
     if (i === 0) {
+      // c0: 시작 구름 — 가장 느린 궤도로 착지 직후 안정감 제공
       layout.push({
         id: 'c0', centerX: _C0_X, centerY: _C0_Y,
-        orbitRadiusX: 105, orbitRadiusY: 34,
-        orbitSpeed: 0.55, startAngle: 0, rotationDirection: 1,
+        orbitRadiusX: EARLY_ORBIT.C0_RADIUS_X,
+        orbitRadiusY: EARLY_ORBIT.C0_RADIUS_Y,
+        orbitSpeed:   EARLY_ORBIT.C0_SPEED,
+        startAngle: 0, rotationDirection: 1,
         width: 380, height: 92, cloudType: 'A',
       });
       continue;
     }
 
-    const width        = _ri(270, 360);
-    const orbitRadiusX = _ri(95, 165);
-    const orbitRadiusY = _ri(34, 60);
-    const margin       = orbitRadiusX + width / 2 + 30;
-    const lo           = Math.ceil(margin);
-    const hi           = Math.floor(_BW - margin);
-    const third        = _BW / 3;
+    // c1~c4: EARLY_LAYOUT 수동 배치 — 느린 궤도로 움직이는 구름 소개
+    if (i <= 4) {
+      const el      = EARLY_LAYOUT[i - 1]!;
+      const centerY = _C0_Y + el.dY;
+      const orbitRX = _ri(EARLY_ORBIT.RADIUS_X_MIN, EARLY_ORBIT.RADIUS_X_MAX);
+      const orbitRY = _ri(EARLY_ORBIT.RADIUS_Y_MIN, EARLY_ORBIT.RADIUS_Y_MAX);
+      const oSpeed  = EARLY_ORBIT.SPEED_MIN +
+                      Math.random() * (EARLY_ORBIT.SPEED_MAX - EARLY_ORBIT.SPEED_MIN);
+      layout.push({
+        id: `c${i}`,
+        centerX:           el.centerX,
+        centerY,
+        orbitRadiusX:      orbitRX,
+        orbitRadiusY:      orbitRY,
+        orbitSpeed:        oSpeed,
+        startAngle:        0,
+        rotationDirection: 1,
+        width:             el.width,
+        height:            el.height,
+        cloudType:         _CLOUD_TYPES[_ri(0, 3)]!,
+      });
+      prevY    = centerY;
+      lastZone = el.centerX < third ? 'left' : el.centerX > third * 2 ? 'right' : 'center';
+      continue;
+    }
+
+    // c5: D=0 궤도값, 직전 존(c4=right)과 다른 존으로 배치
+    const orbitRadiusX = _ri(38, 66);
+    const orbitRadiusY = _ri(14, 24);
+    const orbitSpeed   = 0.275 + Math.random() * 0.275;
+    const width        = _ri(338, 450);
+
+    const margin = orbitRadiusX + width / 2 + 30;
+    const lo     = Math.ceil(margin);
+    const hi     = Math.floor(_BW - margin);
 
     let centerX: number;
     if (lastZone === 'center') {
@@ -175,31 +207,44 @@ export function buildInitialLayout(): CloudIslandConfig[] {
       const rightLo = Math.max(Math.ceil(third * 2) + 1, lo);
       const canL = lo <= leftHi;
       const canR = rightLo <= hi;
-      if (canL && canR) {
-        centerX = Math.random() < 0.5 ? _ri(lo, leftHi) : _ri(rightLo, hi);
-      } else if (canL) {
-        centerX = _ri(lo, leftHi);
-      } else if (canR) {
-        centerX = _ri(rightLo, hi);
-      } else {
-        centerX = _ri(lo, hi);
-      }
+      if      (canL && canR) centerX = Math.random() < 0.5 ? _ri(lo, leftHi) : _ri(rightLo, hi);
+      else if (canL)         centerX = _ri(lo, leftHi);
+      else if (canR)         centerX = _ri(rightLo, hi);
+      else                   centerX = _ri(lo, hi);
+    } else if (lastZone === 'right') {
+      // right 연속 방지: left/center만 허용
+      const leftHi   = Math.min(Math.floor(third) - 1, hi);
+      const centerLo = Math.max(Math.ceil(third), lo);
+      const centerHi = Math.min(Math.floor(third * 2), hi);
+      const canL = lo <= leftHi;
+      const canC = centerLo <= centerHi;
+      if      (canL && canC) centerX = Math.random() < 0.5 ? _ri(lo, leftHi) : _ri(centerLo, centerHi);
+      else if (canL)         centerX = _ri(lo, leftHi);
+      else if (canC)         centerX = _ri(centerLo, centerHi);
+      else                   centerX = _ri(lo, hi);
     } else {
-      centerX = _ri(lo, hi);
+      // left 연속 방지: center/right만 허용
+      const centerLo = Math.max(Math.ceil(third), lo);
+      const centerHi = Math.min(Math.floor(third * 2), hi);
+      const rightLo  = Math.max(Math.ceil(third * 2) + 1, lo);
+      const canC = centerLo <= centerHi;
+      const canR = rightLo <= hi;
+      if      (canC && canR) centerX = Math.random() < 0.5 ? _ri(centerLo, centerHi) : _ri(rightLo, hi);
+      else if (canC)         centerX = _ri(centerLo, centerHi);
+      else if (canR)         centerX = _ri(rightLo, hi);
+      else                   centerX = _ri(lo, hi);
     }
 
     lastZone = centerX < third ? 'left' : centerX > third * 2 ? 'right' : 'center';
-
-    // 세로 간격: SPAWN_CONFIG.CLOUD_SAFE_VISUAL_BOTTOM(200) + TOP(185) + 랜덤 여유(20~70)
     prevY -= _ri(405, 455);
 
     layout.push({
-      id: `c${i}`,
+      id: 'c5',
       centerX,
       centerY: prevY,
       orbitRadiusX,
       orbitRadiusY,
-      orbitSpeed:        0.55 + Math.random() * 0.55,
+      orbitSpeed,
       startAngle:        Math.random() * Math.PI * 2,
       rotationDirection: (Math.random() < 0.5 ? 1 : -1) as (1 | -1),
       width,
