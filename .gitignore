@@ -8,3 +8,4 @@ ios/
 .env.*
 .claude/settings.local.json
 !.env.example
+.claude/worktrees/
