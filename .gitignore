@@ -6,4 +6,5 @@ ios/
 *.local
 .env
 .env.*
-.claude/
+.claude/settings.local.json
+!.env.example
