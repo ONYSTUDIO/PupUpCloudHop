@@ -23,6 +23,7 @@ export class MainScene extends Phaser.Scene {
     startWithShield: false,
     startWithMagnet: false,
     showGuideLines: false,
+    landingShake: false,
   };
   private cheatPopup: CheatPopup | null = null;
   private missionPopup: MissionPopup | null = null;
@@ -545,6 +546,7 @@ export class MainScene extends Phaser.Scene {
           startWithShield: this.cheatSettings.startWithShield,
           startWithMagnet: this.cheatSettings.startWithMagnet,
           showGuideLines: this.cheatSettings.showGuideLines,
+          landingShake: this.cheatSettings.landingShake,
         });
       })
       .on('pointerover', () => startBg.setAlpha(0.8))

@@ -28,6 +28,6 @@ export default [
     },
   },
   {
-    ignores: ['dist/**', 'android/**', 'ios/**', 'node_modules/**', '*.config.*'],
+    ignores: ['dist/**', 'android/**', 'ios/**', 'node_modules/**', '*.config.*', '.claude/**'],
   },
 ];

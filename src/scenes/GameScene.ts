@@ -16,8 +16,10 @@ import { CloudFreezeSystem } from '@systems/CloudFreezeSystem';
 import { TimeSlowItemSystem } from '@systems/TimeSlowItemSystem';
 import { TimeSlowSystem } from '@systems/TimeSlowSystem';
 import { AudioManager } from '@managers/AudioManager';
+import { HapticsManager } from '@managers/HapticsManager';
 import { InputManager } from '@managers/InputManager';
 import { SaveManager } from '@managers/SaveManager';
+import { HAPTICS_CONFIG } from '@config/hapticsConfig';
 import { authService } from '../services/AuthService';
 import { TopHud } from '@ui/TopHud';
 import { ScoreHud } from '@ui/ScoreHud';
@@ -62,6 +64,8 @@ export class GameScene extends Phaser.Scene {
 
   // 매니저 / UI
   private audioManager!: AudioManager;
+  private hapticsManager!: HapticsManager;
+  private landingShake: boolean = false;
   private inputManager!: InputManager;
   private saveManager!: SaveManager;
   private topHud!: TopHud;
@@ -148,8 +152,9 @@ export class GameScene extends Phaser.Scene {
     super({ key: SCENE_KEYS.GAME });
   }
 
-  create(data?: { pattern?: JumpPatternType; startWithShield?: boolean; startWithMagnet?: boolean; showGuideLines?: boolean }): void {
+  create(data?: { pattern?: JumpPatternType; startWithShield?: boolean; startWithMagnet?: boolean; showGuideLines?: boolean; landingShake?: boolean }): void {
     this.jumpPattern = data?.pattern ?? JumpPatternType.PATTERN_3;
+    this.landingShake = data?.landingShake ?? false;
     this.isGameOver = false;
     this.isDangerSlow = false;
     this.dangerSlowElapsed = 0;
@@ -185,6 +190,7 @@ export class GameScene extends Phaser.Scene {
 
     this.saveManager = new SaveManager();
     this.audioManager = new AudioManager(this, this.saveManager.isSoundEnabled());
+    this.hapticsManager = new HapticsManager(this.saveManager.isVibrationEnabled());
     this.movementSystem = new PlatformMovementSystem();
     this.jumpSystem = new JumpSystem();
     this.collisionSystem = new CollisionSystem();
@@ -1220,6 +1226,7 @@ export class GameScene extends Phaser.Scene {
     );
 
     if (jumped) {
+      this.hapticsManager.vibrate('JUMP');
       this.idleAnimTimer = 0; // idle-anim 리셋 → corgi_left/right로 복귀
       this.jumpedFromId = this.currentCloudId;
       this.jumpTime = this.time.now;
@@ -1267,6 +1274,7 @@ export class GameScene extends Phaser.Scene {
 
     if (cloud.id !== prevId) {
       this.scoreSystem.onLand(cloud.topY, cloud.x);
+      this.spawnLandDust(this.player.x, cloud.topY);
 
       // 착지 횟수가 늘었으므로 D 재계산 → 진자 속도·스폰 간격·판정 갱신
       const landings = this.scoreSystem.getLandingCount();
@@ -1281,10 +1289,15 @@ export class GameScene extends Phaser.Scene {
       if (import.meta.env.DEV) this.updateDevDiffDisplay();
     }
 
-    // 별 착지 수집 — 해당 구름에 별이 있으면 로켓 모드 발동
+    // 별 착지 수집 — 해당 구름에 별이 있으면 로켓 모드 발동 (shake 제외)
     if (this.starItemSystem.checkLanding(cloud)) {
       this.startRocketMode();
       return;
+    }
+
+    // 카메라 흔들림 — 로켓 모드 착지 제외
+    if (this.landingShake && cloud.id !== prevId) {
+      this.cameras.main.shake(HAPTICS_CONFIG.LANDING_SHAKE.duration, HAPTICS_CONFIG.LANDING_SHAKE.intensity);
     }
 
     // 자석 아이템 수집 — 자석 효과 활성화
@@ -1376,9 +1389,11 @@ export class GameScene extends Phaser.Scene {
 
       this.pausePopup = new PausePopup(
         this,
+        this.saveManager.isSoundEnabled(),
+        this.saveManager.isVibrationEnabled(),
         () => {
           // 다시하기
-          this.scene.start(SCENE_KEYS.GAME, { pattern: this.jumpPattern });
+          this.scene.start(SCENE_KEYS.GAME, { pattern: this.jumpPattern, landingShake: this.landingShake });
         },
         () => {
           // 메인으로
@@ -1393,6 +1408,14 @@ export class GameScene extends Phaser.Scene {
             this.inputManager.enable();
             if (isDragPattern) this.directionWheel.enable();
           }
+        },
+        (enabled: boolean) => {
+          this.saveManager.setSoundEnabled(enabled);
+          this.audioManager.setSoundEnabled(enabled);
+        },
+        (enabled: boolean) => {
+          this.saveManager.setVibrationEnabled(enabled);
+          this.hapticsManager.setEnabled(enabled);
         },
       );
     } else {
@@ -1432,6 +1455,7 @@ export class GameScene extends Phaser.Scene {
                           this.jumpPattern === JumpPatternType.PATTERN_2;
     if (isDragPattern) this.directionWheel.disable();
 
+    this.hapticsManager.vibrate('GAME_OVER');
     this.events.emit(EVENTS.GAME_OVER);
 
     this.time.delayedCall(600, () => {
@@ -2040,6 +2064,28 @@ export class GameScene extends Phaser.Scene {
         scaleY: 0.15,
         duration: 650 + Math.random() * 350,
         ease: 'Cubic.easeOut',
+        onComplete: () => dot.destroy(),
+      });
+    }
+  }
+
+  private spawnLandDust(x: number, y: number): void {
+    for (let i = 0; i < 6; i++) {
+      const angle = Phaser.Math.DegToRad(Phaser.Math.Between(220, 320));
+      const dist = Phaser.Math.Between(50, 120);
+      const dot = this.add.graphics();
+      dot.fillStyle(0xeeeeee, 0.75);
+      dot.fillCircle(0, 0, Phaser.Math.Between(5, 10));
+      dot.setPosition(x + Phaser.Math.Between(-20, 20), y);
+      dot.setDepth(DEPTH.EFFECT);
+      this.tweens.add({
+        targets: dot,
+        x: dot.x + Math.cos(angle) * dist,
+        y: dot.y + Math.sin(angle) * dist,
+        alpha: 0,
+        scale: 0.1,
+        duration: Phaser.Math.Between(280, 420),
+        ease: 'Quad.easeOut',
         onComplete: () => dot.destroy(),
       });
     }
