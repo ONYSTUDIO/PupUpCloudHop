@@ -1291,6 +1291,7 @@ export class GameScene extends Phaser.Scene {
 
     // 별 착지 수집 — 해당 구름에 별이 있으면 로켓 모드 발동 (shake 제외)
     if (this.starItemSystem.checkLanding(cloud)) {
+      this.saveManager.recordItemPickup();
       this.startRocketMode();
       return;
     }
@@ -1302,12 +1303,14 @@ export class GameScene extends Phaser.Scene {
 
     // 자석 아이템 수집 — 자석 효과 활성화
     if (this.magnetItemSystem.checkLanding(cloud)) {
+      this.saveManager.recordItemPickup();
       this.magnetSystem.activate();
       this.scoreHud.showMagnetTimer(this.magnetSystem.timer);
     }
 
     // 얼음 아이템 수집 — 구름 동결 + 장애물 홀딩 효과 활성화
     if (this.iceItemSystem.checkLanding(cloud)) {
+      this.saveManager.recordItemPickup();
       this.cloudFreezeSystem.activate(this.clouds);
       this.obstacleSystem.freeze();
       this.scoreHud.showFreezeTimer(this.cloudFreezeSystem.timer);
@@ -1315,6 +1318,7 @@ export class GameScene extends Phaser.Scene {
 
     // 타임슬로우 아이템 수집 — 게임 세계 속도 절반으로 감소
     if (this.timeSlowItemSystem.checkLanding(cloud)) {
+      this.saveManager.recordItemPickup();
       this.timeSlowSystem.activate();
       this.scoreHud.showSlowTimer(this.timeSlowSystem.timer);
     }
@@ -1718,6 +1722,8 @@ export class GameScene extends Phaser.Scene {
     const isNewBest   = this.saveManager.submitScore(score.current, score.jumps);
     const scoreCoin   = score.current * GAMEPLAY.COIN_PER_SCORE;
     this.saveManager.addCoins(scoreCoin); // 보너스 코인은 이미 플레이 중 추가됨
+    // 일일·주간 미션 진행도 업데이트 (착지 횟수, 점수)
+    this.saveManager.updateDailyProgress(score.jumps, score.current);
     const coinsEarned = scoreCoin + this.bonusCoinsEarned;
     const totalCoins  = this.saveManager.getCoins();
 

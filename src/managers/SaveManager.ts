@@ -1,6 +1,6 @@
 import type { SaveData } from '@game-types/game';
 import { STORAGE_KEYS } from '@config/constants';
-import { ALL_MISSIONS } from '@config/missions';
+import { ALL_MISSIONS, DAILY_MISSIONS, WEEKLY_MISSIONS } from '@config/missions';
 
 /**
  * 저장소 어댑터 인터페이스 — 추후 Capacitor Preferences로 교체 가능
@@ -49,6 +49,20 @@ const DEFAULT_SAVE: SaveData = {
   lastAttendanceDate: '',
   attendanceStreak: 0,
   attendanceDayClaimed: [false, false, false, false, false, false, false],
+  // 아이템 조각
+  fragments: 0,
+  // 일일 미션
+  lastDailyReset: '',
+  dailyLandingCount: 0,
+  dailyScoreReached: false,
+  dailyItemPickedUp: false,
+  dailyMissionClaimed: [],
+  // 주간 미션
+  lastWeeklyReset: '',
+  weeklyTotalLandings: 0,
+  weeklyBestScore: 0,
+  weeklyDailyMissionDaysCompleted: 0,
+  weeklyMissionClaimed: [],
 };
 
 export class SaveManager {
@@ -105,6 +119,19 @@ export class SaveManager {
     const d = new Date();
     d.setDate(d.getDate() - 1);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  /**
+   * 이번 주 월요일의 'YYYY-MM-DD' 문자열 반환.
+   * 주 기준: 월요일 시작.
+   */
+  private mondayString(): string {
+    const d = new Date();
+    const day = d.getDay(); // 0=일, 1=월 ...
+    const diff = day === 0 ? -6 : 1 - day; // 이번 주 월요일로 이동
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diff);
+    return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
   }
 
   /** 오늘 무료 스핀이 남아있으면 true */
@@ -185,6 +212,25 @@ export class SaveManager {
 
   // ─────────────────────────────────────────────────────────────
 
+  // ─── 아이템 조각 ──────────────────────────────────────────────
+
+  getFragments(): number { return this.data.fragments ?? 0; }
+
+  addFragments(amount: number): void {
+    this.data.fragments = Math.max(0, (this.data.fragments ?? 0) + amount);
+    this.persist();
+  }
+
+  /** 조각 소비. 잔량 부족 시 false 반환. */
+  spendFragments(amount: number): boolean {
+    if ((this.data.fragments ?? 0) < amount) return false;
+    this.data.fragments -= amount;
+    this.persist();
+    return true;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+
   /** 다이아몬드 1개 = 코인 150개, 단방향 교환 */
   exchangeDiamondsToCoins(diamondAmount: number): boolean {
     if (!this.spendDiamonds(diamondAmount)) return false;
@@ -229,24 +275,196 @@ export class SaveManager {
     return isNewBest;
   }
 
-  // ─── 미션 ─────────────────────────────────────────────────
+  // ─── 미션 (permanent) ────────────────────────────────────
 
   getClaimedMissions(): ReadonlySet<string> {
     return new Set(this.data.claimedMissions);
   }
 
-  /** 미션을 수령 처리하고 코인을 지급. 이미 수령했거나 미달성이면 0 반환. */
+  /** permanent 미션을 수령 처리하고 코인을 지급. 이미 수령했거나 미달성이면 0 반환. */
   claimMission(id: string): number {
     if (this.data.claimedMissions.includes(id)) return 0;
-    const mission = ALL_MISSIONS.find((m) => m.id === id);
+    const mission = ALL_MISSIONS.find((m) => m.id === id && m.period === 'permanent');
     if (!mission) return 0;
-    const progress = mission.type === 'score'
+    const progress = mission.condition === 'score'
       ? this.data.bestScore
       : this.data.bestLandings;
     if (progress < mission.target) return 0;
     this.data.claimedMissions.push(id);
     this.addCoins(mission.coinReward);
     return mission.coinReward;
+  }
+
+  // ─── 일일 미션 ────────────────────────────────────────────
+
+  /** 특정 일일 미션 ID를 오늘 이미 수령했는지 확인 */
+  isDailyMissionClaimed(id: string): boolean {
+    return (this.data.dailyMissionClaimed ?? []).includes(id);
+  }
+
+  /** 특정 주간 미션 ID를 이번 주 이미 수령했는지 확인 */
+  isWeeklyMissionClaimed(id: string): boolean {
+    return (this.data.weeklyMissionClaimed ?? []).includes(id);
+  }
+
+  /**
+   * 일일 미션 리셋 체크. MissionPopup 열 때 호출.
+   * 오늘 날짜가 lastDailyReset 과 다르면 일일 진행도를 모두 초기화.
+   */
+  checkAndResetDailyMissions(): void {
+    const today = this.todayString();
+    if (this.data.lastDailyReset === today) return;
+    this.data.dailyLandingCount = 0;
+    this.data.dailyScoreReached = false;
+    this.data.dailyItemPickedUp = false;
+    this.data.dailyMissionClaimed = [];
+    this.data.lastDailyReset = today;
+    this.persist();
+  }
+
+  /**
+   * 주간 미션 리셋 체크. MissionPopup 열 때 호출.
+   * 이번 주 월요일이 lastWeeklyReset 과 다르면 주간 진행도를 모두 초기화.
+   */
+  checkAndResetWeeklyMissions(): void {
+    const monday = this.mondayString();
+    if (this.data.lastWeeklyReset === monday) return;
+    this.data.weeklyTotalLandings = 0;
+    this.data.weeklyBestScore = 0;
+    this.data.weeklyDailyMissionDaysCompleted = 0;
+    this.data.weeklyMissionClaimed = [];
+    this.data.lastWeeklyReset = monday;
+    this.persist();
+  }
+
+  /**
+   * 게임 종료 시 일일·주간 진행도 업데이트.
+   * GameScene의 finalizeGameOver 이후 호출.
+   */
+  updateDailyProgress(landingCount: number, score: number): void {
+    // 일일 리셋 체크 (날짜 바뀐 채로 게임 종료 시 안전 처리)
+    const today = this.todayString();
+    if (this.data.lastDailyReset !== today) {
+      this.data.dailyLandingCount = 0;
+      this.data.dailyScoreReached = false;
+      this.data.dailyItemPickedUp = false;
+      this.data.dailyMissionClaimed = [];
+      this.data.lastDailyReset = today;
+    }
+    // 주간 리셋 체크
+    const monday = this.mondayString();
+    if (this.data.lastWeeklyReset !== monday) {
+      this.data.weeklyTotalLandings = 0;
+      this.data.weeklyBestScore = 0;
+      this.data.weeklyDailyMissionDaysCompleted = 0;
+      this.data.weeklyMissionClaimed = [];
+      this.data.lastWeeklyReset = monday;
+    }
+
+    // 일일 진행도 업데이트
+    this.data.dailyLandingCount += landingCount;
+    if (score >= 20) this.data.dailyScoreReached = true;
+
+    // 주간 진행도 업데이트
+    this.data.weeklyTotalLandings += landingCount;
+    if (score > this.data.weeklyBestScore) {
+      this.data.weeklyBestScore = score;
+    }
+
+    this.persist();
+  }
+
+  /**
+   * 인게임 아이템 픽업 시 호출.
+   * dailyItemPickedUp = true, 아이템 조각 1개 자동 획득.
+   */
+  recordItemPickup(): void {
+    this.data.dailyItemPickedUp = true;
+    this.addFragments(1);
+  }
+
+  /**
+   * 일일 미션 달성 현재 진행도 조회.
+   * 'daily_score_20': 달성 여부를 boolean → target 값 또는 0으로 반환.
+   */
+  getDailyMissionProgress(id: string): number {
+    switch (id) {
+      case 'daily_land_10':  return this.data.dailyLandingCount ?? 0;
+      case 'daily_score_20': return (this.data.dailyScoreReached ?? false) ? 20 : 0;
+      case 'daily_item_1':   return (this.data.dailyItemPickedUp ?? false) ? 1 : 0;
+      default:               return 0;
+    }
+  }
+
+  /**
+   * 일일 미션 수령.
+   * 이미 수령했거나 미달성이면 { coins: 0, fragments: 0, revival: 0 } 반환.
+   * 성공 시 보상 지급 후 오늘 3개 모두 완료되면 weeklyDailyMissionDaysCompleted 증가.
+   */
+  claimDailyMission(id: string): { coins: number; fragments: number; revival: number } {
+    const empty = { coins: 0, fragments: 0, revival: 0 };
+    if ((this.data.dailyMissionClaimed ?? []).includes(id)) return empty;
+
+    const mission = DAILY_MISSIONS.find((m) => m.id === id);
+    if (!mission) return empty;
+
+    const progress = this.getDailyMissionProgress(id);
+    if (progress < mission.target) return empty;
+
+    // 보상 지급
+    if (mission.coinReward > 0)     this.addCoins(mission.coinReward);
+    if (mission.fragmentReward > 0) this.addFragments(mission.fragmentReward);
+    if (mission.revivalReward > 0)  this.addRevivalItem(mission.revivalReward);
+
+    this.data.dailyMissionClaimed = [...(this.data.dailyMissionClaimed ?? []), id];
+
+    // 오늘 일일 미션 3개 전부 완료 시 weeklyDailyMissionDaysCompleted 증가
+    const allDailyIds = DAILY_MISSIONS.map((m) => m.id);
+    const allClaimed = allDailyIds.every((mid) => this.data.dailyMissionClaimed.includes(mid));
+    if (allClaimed) {
+      this.data.weeklyDailyMissionDaysCompleted = (this.data.weeklyDailyMissionDaysCompleted ?? 0) + 1;
+    }
+
+    this.persist();
+    return { coins: mission.coinReward, fragments: mission.fragmentReward, revival: mission.revivalReward };
+  }
+
+  // ─── 주간 미션 ────────────────────────────────────────────
+
+  /**
+   * 주간 미션 달성 현재 진행도 조회.
+   */
+  getWeeklyMissionProgress(id: string): number {
+    switch (id) {
+      case 'weekly_land_50':  return this.data.weeklyTotalLandings ?? 0;
+      case 'weekly_score_40': return this.data.weeklyBestScore ?? 0;
+      case 'weekly_daily_3':  return this.data.weeklyDailyMissionDaysCompleted ?? 0;
+      default:                return 0;
+    }
+  }
+
+  /**
+   * 주간 미션 수령.
+   * 이미 수령했거나 미달성이면 { coins: 0, fragments: 0, revival: 0 } 반환.
+   */
+  claimWeeklyMission(id: string): { coins: number; fragments: number; revival: number } {
+    const empty = { coins: 0, fragments: 0, revival: 0 };
+    if ((this.data.weeklyMissionClaimed ?? []).includes(id)) return empty;
+
+    const mission = WEEKLY_MISSIONS.find((m) => m.id === id);
+    if (!mission) return empty;
+
+    const progress = this.getWeeklyMissionProgress(id);
+    if (progress < mission.target) return empty;
+
+    // 보상 지급
+    if (mission.coinReward > 0)     this.addCoins(mission.coinReward);
+    if (mission.fragmentReward > 0) this.addFragments(mission.fragmentReward);
+    if (mission.revivalReward > 0)  this.addRevivalItem(mission.revivalReward);
+
+    this.data.weeklyMissionClaimed = [...(this.data.weeklyMissionClaimed ?? []), id];
+    this.persist();
+    return { coins: mission.coinReward, fragments: mission.fragmentReward, revival: mission.revivalReward };
   }
 
   // ─── 출석 체크 ────────────────────────────────────────────
@@ -278,7 +496,10 @@ export class SaveManager {
     return { isNewDay: true, dayIndex: 0 };
   }
 
-  /** 오늘 출석 보상 지급 및 상태 갱신. 이미 수령했으면 무시. */
+  /**
+   * 오늘 출석 보상 지급 및 상태 갱신. 이미 수령했으면 무시.
+   * docs/ECONOMY_DESIGN.md 기준 출석 보상 배열.
+   */
   claimAttendance(): void {
     const today = this.todayString();
     if (this.data.lastAttendanceDate === today) return;
@@ -303,21 +524,21 @@ export class SaveManager {
     }
 
     const dayIndex = newStreak - 1;
+    // day 3(index 2): coins:80, day 5(index 4): fragments:10, day 7(index 6): revival:1+coins:200
     const REWARDS = [
       { coins: 30 },
       { coins: 50 },
-      { shield: 1 },
       { coins: 80 },
-      { revival: 1 },
+      { coins: 80 },
+      { fragments: 10 },
       { coins: 100 },
-      { diamonds: 3 },
+      { revival: 1, coins: 200 },
     ] as const;
 
     const r = REWARDS[dayIndex]!;
-    if ('coins'    in r) this.addCoins(r.coins);
-    if ('shield'   in r) this.addShieldItem(r.shield);
-    if ('revival'  in r) this.addRevivalItem(r.revival);
-    if ('diamonds' in r) this.addDiamonds(r.diamonds);
+    if ('coins'     in r) this.addCoins(r.coins);
+    if ('fragments' in r) this.addFragments(r.fragments);
+    if ('revival'   in r) this.addRevivalItem(r.revival);
 
     this.data.attendanceStreak = newStreak;
     this.data.attendanceDayClaimed[dayIndex] = true;
@@ -335,19 +556,53 @@ export class SaveManager {
 
   // ──────────────────────────────────────────────────────────
 
-  /** [테스트용] 수령 완료 미션을 모두 초기화해 다시 수령 가능 상태로 되돌린다. */
+  /** [테스트용] permanent 수령 완료 미션을 모두 초기화해 다시 수령 가능 상태로 되돌린다. */
   resetClaimedMissions(): void {
     this.data.claimedMissions = [];
     this.persist();
   }
 
-  /** 수령 가능한(달성됐지만 미수령인) 미션이 하나라도 있으면 true */
+  /** [테스트용] 일일 미션 상태를 초기화해 다시 리셋되도록 한다. */
+  resetDailyMissions(): void {
+    this.data.lastDailyReset = '';
+    this.persist();
+  }
+
+  /** [테스트용] 주간 미션 상태를 초기화해 다시 리셋되도록 한다. */
+  resetWeeklyMissions(): void {
+    this.data.lastWeeklyReset = '';
+    this.persist();
+  }
+
+  /**
+   * 수령 가능한(달성됐지만 미수령인) 미션이 하나라도 있으면 true.
+   * permanent + 일일 + 주간 모두 확인.
+   */
   hasPendingMissions(): boolean {
+    // permanent 미션
     const claimed = new Set(this.data.claimedMissions);
-    return ALL_MISSIONS.some((m) => {
-      if (claimed.has(m.id)) return false;
-      const progress = m.type === 'score' ? this.data.bestScore : this.data.bestLandings;
-      return progress >= m.target;
+    const hasPermanent = ALL_MISSIONS
+      .filter((m) => m.period === 'permanent')
+      .some((m) => {
+        if (claimed.has(m.id)) return false;
+        const progress = m.condition === 'score' ? this.data.bestScore : this.data.bestLandings;
+        return progress >= m.target;
+      });
+    if (hasPermanent) return true;
+
+    // 일일 미션
+    const dailyClaimed = new Set(this.data.dailyMissionClaimed ?? []);
+    const hasDaily = DAILY_MISSIONS.some((m) => {
+      if (dailyClaimed.has(m.id)) return false;
+      return this.getDailyMissionProgress(m.id) >= m.target;
+    });
+    if (hasDaily) return true;
+
+    // 주간 미션
+    const weeklyClaimed = new Set(this.data.weeklyMissionClaimed ?? []);
+    return WEEKLY_MISSIONS.some((m) => {
+      if (weeklyClaimed.has(m.id)) return false;
+      return this.getWeeklyMissionProgress(m.id) >= m.target;
     });
   }
 

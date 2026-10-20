@@ -1,7 +1,13 @@
 import Phaser from 'phaser';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/baseDimensions';
 import { DEPTH } from '@config/constants';
-import { LANDING_MISSIONS, SCORE_MISSIONS, type MissionDef } from '@config/missions';
+import {
+  LANDING_MISSIONS,
+  SCORE_MISSIONS,
+  DAILY_MISSIONS,
+  WEEKLY_MISSIONS,
+  type MissionDef,
+} from '@config/missions';
 import type { SaveManager } from '@managers/SaveManager';
 import { missionService } from '@services/MissionService';
 
@@ -22,24 +28,31 @@ const CONTENT_TOP = PANEL_TOP + 192;
 const firstRowCY = (idx: number): number =>
   CONTENT_TOP + ROW_H / 2 + idx * ROW_STEP;
 
-type TabKey = 'landing' | 'score';
+type TabKey = 'daily' | 'weekly';
+
+/** 미션 행 수령 결과 타입 */
+interface ClaimResult {
+  coins: number;
+  fragments: number;
+  revival: number;
+}
 
 export class MissionPopup {
   private objs: Phaser.GameObjects.GameObject[] = [];
   private destroyed = false;
 
-  private landingTabObjs: Phaser.GameObjects.GameObject[] = [];
-  private scoreTabObjs:   Phaser.GameObjects.GameObject[] = [];
+  private dailyTabObjs:  Phaser.GameObjects.GameObject[] = [];
+  private weeklyTabObjs: Phaser.GameObjects.GameObject[] = [];
 
-  private landingTabBg!: Phaser.GameObjects.Graphics;
-  private scoreTabBg!:   Phaser.GameObjects.Graphics;
-  private landingTabText!: Phaser.GameObjects.Text;
-  private scoreTabText!:   Phaser.GameObjects.Text;
+  private dailyTabBg!:  Phaser.GameObjects.Graphics;
+  private weeklyTabBg!: Phaser.GameObjects.Graphics;
+  private dailyTabText!:  Phaser.GameObjects.Text;
+  private weeklyTabText!: Phaser.GameObjects.Text;
 
   // 탭별 수령 가능 행 트리거 목록
-  private landingClaimableRows: Array<() => void> = [];
-  private scoreClaimableRows:   Array<() => void> = [];
-  private currentTab: TabKey = 'landing';
+  private dailyClaimableRows:  Array<() => void> = [];
+  private weeklyClaimableRows: Array<() => void> = [];
+  private currentTab: TabKey = 'daily';
   private claimAllBtn: Phaser.GameObjects.Text | null = null;
 
   constructor(
@@ -48,6 +61,10 @@ export class MissionPopup {
     onCoinsChanged: () => void,
     onClose: () => void,
   ) {
+    // 팝업 열릴 때 리셋 체크
+    saveManager.checkAndResetDailyMissions();
+    saveManager.checkAndResetWeeklyMissions();
+
     // ── dim ────────────────────────────────────────────────
     this.reg(
       scene.add.rectangle(0, 0, BASE_WIDTH, BASE_HEIGHT, 0x000020, 0.65)
@@ -72,58 +89,11 @@ export class MissionPopup {
     // ── 탭 바 ──────────────────────────────────────────────
     this.buildTabs(scene);
 
-    // ── 미션 행 ────────────────────────────────────────────
-    const claimed = saveManager.getClaimedMissions();
-    const bestLandings = saveManager.getBestLandings();
-    const bestScore    = saveManager.getBestScore();
+    // ── 일일 탭 콘텐츠 ─────────────────────────────────────
+    this.buildDailyTab(scene, saveManager, onCoinsChanged);
 
-    LANDING_MISSIONS.forEach((m, i) => {
-      let myTrigger: (() => void) | undefined;
-      const { objs, triggerClaim } = this.buildRow(
-        scene, m, firstRowCY(i), bestLandings, claimed.has(m.id), this.landingTabObjs,
-        () => {
-          const reward = saveManager.claimMission(m.id);
-          if (reward > 0) {
-            onCoinsChanged();
-            if (myTrigger) {
-              const idx = this.landingClaimableRows.indexOf(myTrigger);
-              if (idx >= 0) this.landingClaimableRows.splice(idx, 1);
-            }
-            this.refreshClaimAllBtn();
-            missionService.claimMission(m).catch((e: unknown) => {
-              console.warn('[MissionService] claim failed', e);
-            });
-          }
-        },
-      );
-      myTrigger = triggerClaim;
-      objs.forEach((o) => { this.reg(o); this.landingTabObjs.push(o); });
-      if (triggerClaim) this.landingClaimableRows.push(triggerClaim);
-    });
-
-    SCORE_MISSIONS.forEach((m, i) => {
-      let myTrigger: (() => void) | undefined;
-      const { objs, triggerClaim } = this.buildRow(
-        scene, m, firstRowCY(i), bestScore, claimed.has(m.id), this.scoreTabObjs,
-        () => {
-          const reward = saveManager.claimMission(m.id);
-          if (reward > 0) {
-            onCoinsChanged();
-            if (myTrigger) {
-              const idx = this.scoreClaimableRows.indexOf(myTrigger);
-              if (idx >= 0) this.scoreClaimableRows.splice(idx, 1);
-            }
-            this.refreshClaimAllBtn();
-            missionService.claimMission(m).catch((e: unknown) => {
-              console.warn('[MissionService] claim failed', e);
-            });
-          }
-        },
-      );
-      myTrigger = triggerClaim;
-      objs.forEach((o) => { this.reg(o); this.scoreTabObjs.push(o); });
-      if (triggerClaim) this.scoreClaimableRows.push(triggerClaim);
-    });
+    // ── 주간 탭 콘텐츠 ─────────────────────────────────────
+    this.buildWeeklyTab(scene, saveManager, onCoinsChanged);
 
     // ── 모두 수령 버튼 ─────────────────────────────────────
     this.claimAllBtn = scene.add
@@ -137,15 +107,15 @@ export class MissionPopup {
       .on('pointerout',  function (this: Phaser.GameObjects.Text) { this.setAlpha(1); })
       .on('pointerdown', () => {
         if (this.destroyed) return;
-        const rows = this.currentTab === 'landing'
-          ? [...this.landingClaimableRows]
-          : [...this.scoreClaimableRows];
+        const rows = this.currentTab === 'daily'
+          ? [...this.dailyClaimableRows]
+          : [...this.weeklyClaimableRows];
         if (rows.length < 2) return;
         rows.forEach((trigger) => trigger());
       });
     this.reg(this.claimAllBtn);
 
-    this.showTab('landing');
+    this.showTab('daily');
 
     // ── 닫기 버튼 ──────────────────────────────────────────
     this.reg(
@@ -171,35 +141,176 @@ export class MissionPopup {
     this.objs = [];
   }
 
+  // ─── 일일 탭 빌드 ────────────────────────────────────────
+
+  private buildDailyTab(
+    scene: Phaser.Scene,
+    saveManager: SaveManager,
+    onCoinsChanged: () => void,
+  ): void {
+    // 리셋 타이머 텍스트
+    const resetLabel = scene.add
+      .text(CX, CONTENT_TOP - 24, '오늘 자정 리셋', {
+        fontSize: '28px', color: '#667799',
+      })
+      .setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
+    this.reg(resetLabel);
+    this.dailyTabObjs.push(resetLabel);
+
+    // 일일 미션 3행
+    DAILY_MISSIONS.forEach((m, i) => {
+      let myTrigger: (() => void) | undefined;
+      const progress = saveManager.getDailyMissionProgress(m.id);
+      const isClaimed = saveManager.isDailyMissionClaimed(m.id);
+
+      const { objs, triggerClaim } = this.buildRow(
+        scene, m, firstRowCY(i), progress, isClaimed, this.dailyTabObjs,
+        () => {
+          const reward = saveManager.claimDailyMission(m.id);
+          if (reward.coins > 0 || reward.fragments > 0 || reward.revival > 0) {
+            onCoinsChanged();
+            if (myTrigger) {
+              const idx = this.dailyClaimableRows.indexOf(myTrigger);
+              if (idx >= 0) this.dailyClaimableRows.splice(idx, 1);
+            }
+            this.refreshClaimAllBtn();
+          }
+        },
+      );
+      myTrigger = triggerClaim;
+      objs.forEach((o) => { this.reg(o); this.dailyTabObjs.push(o); });
+      if (triggerClaim) this.dailyClaimableRows.push(triggerClaim);
+    });
+
+    // 구분선 + 장기 목표 헤더
+    const separatorY = firstRowCY(DAILY_MISSIONS.length) + ROW_H / 2 + 14;
+    const divG = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPUP);
+    divG.lineStyle(1, 0x334466, 0.7);
+    divG.beginPath();
+    divG.moveTo(ROW_LEFT, separatorY);
+    divG.lineTo(ROW_RIGHT, separatorY);
+    divG.strokePath();
+    this.reg(divG);
+    this.dailyTabObjs.push(divG);
+
+    const sectionHeader = scene.add
+      .text(ROW_LEFT + 8, separatorY + 16, '장기 목표', {
+        fontSize: '32px', color: '#8899aa', fontStyle: 'bold',
+      })
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.POPUP);
+    this.reg(sectionHeader);
+    this.dailyTabObjs.push(sectionHeader);
+
+    // 고정 미션 행 (LANDING_MISSIONS + SCORE_MISSIONS)
+    const permanentMissions: MissionDef[] = [...LANDING_MISSIONS, ...SCORE_MISSIONS];
+    const permanentTopY  = separatorY + 52;
+
+    const claimed = saveManager.getClaimedMissions();
+    permanentMissions.forEach((m, i) => {
+      const progress  = m.condition === 'score'
+        ? saveManager.getBestScore()
+        : saveManager.getBestLandings();
+      const isClaimed = claimed.has(m.id);
+      const rowCY     = permanentTopY + ROW_H / 2 + i * ROW_STEP;
+
+      // 패널 하단 클리핑: 닫기 버튼 위쪽으로만 표시
+      if (rowCY + ROW_H / 2 > PANEL_BOT - 180) return;
+
+      let myTrigger: (() => void) | undefined;
+      const { objs, triggerClaim } = this.buildRow(
+        scene, m, rowCY, progress, isClaimed, this.dailyTabObjs,
+        () => {
+          const reward = saveManager.claimMission(m.id);
+          if (reward > 0) {
+            onCoinsChanged();
+            if (myTrigger) {
+              const idx = this.dailyClaimableRows.indexOf(myTrigger);
+              if (idx >= 0) this.dailyClaimableRows.splice(idx, 1);
+            }
+            this.refreshClaimAllBtn();
+            missionService.claimMission(m).catch((e: unknown) => {
+              console.warn('[MissionService] claim failed', e);
+            });
+          }
+        },
+      );
+      myTrigger = triggerClaim;
+      objs.forEach((o) => { this.reg(o); this.dailyTabObjs.push(o); });
+      if (triggerClaim) this.dailyClaimableRows.push(triggerClaim);
+    });
+  }
+
+  // ─── 주간 탭 빌드 ────────────────────────────────────────
+
+  private buildWeeklyTab(
+    scene: Phaser.Scene,
+    saveManager: SaveManager,
+    onCoinsChanged: () => void,
+  ): void {
+    // 리셋 텍스트
+    const resetLabel = scene.add
+      .text(CX, CONTENT_TOP - 24, '이번 주 월요일 리셋', {
+        fontSize: '28px', color: '#667799',
+      })
+      .setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
+    this.reg(resetLabel);
+    this.weeklyTabObjs.push(resetLabel);
+
+    // 주간 미션 3행
+    WEEKLY_MISSIONS.forEach((m, i) => {
+      let myTrigger: (() => void) | undefined;
+      const progress  = saveManager.getWeeklyMissionProgress(m.id);
+      const isClaimed = saveManager.isWeeklyMissionClaimed(m.id);
+
+      const { objs, triggerClaim } = this.buildRow(
+        scene, m, firstRowCY(i), progress, isClaimed, this.weeklyTabObjs,
+        () => {
+          const reward = saveManager.claimWeeklyMission(m.id);
+          if (reward.coins > 0 || reward.fragments > 0 || reward.revival > 0) {
+            onCoinsChanged();
+            if (myTrigger) {
+              const idx = this.weeklyClaimableRows.indexOf(myTrigger);
+              if (idx >= 0) this.weeklyClaimableRows.splice(idx, 1);
+            }
+            this.refreshClaimAllBtn();
+          }
+        },
+      );
+      myTrigger = triggerClaim;
+      objs.forEach((o) => { this.reg(o); this.weeklyTabObjs.push(o); });
+      if (triggerClaim) this.weeklyClaimableRows.push(triggerClaim);
+    });
+  }
+
   // ─── 탭 ─────────────────────────────────────────────────
 
   private buildTabs(scene: Phaser.Scene): void {
     const TAB_Y = PANEL_TOP + 128;
     const TAB_W = PANEL_W / 2;
 
-    this.landingTabBg = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPUP);
-    this.reg(this.landingTabBg);
+    this.dailyTabBg = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPUP);
+    this.reg(this.dailyTabBg);
 
-    this.landingTabText = scene.add
-      .text(CX - TAB_W / 2, TAB_Y, '착지 미션', {
+    this.dailyTabText = scene.add
+      .text(CX - TAB_W / 2, TAB_Y, '일일', {
         fontSize: '40px', fontStyle: 'bold', color: '#ffffff',
       })
       .setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.POPUP)
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.showTab('landing'));
-    this.reg(this.landingTabText);
+      .on('pointerdown', () => this.showTab('daily'));
+    this.reg(this.dailyTabText);
 
-    this.scoreTabBg = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPUP);
-    this.reg(this.scoreTabBg);
+    this.weeklyTabBg = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPUP);
+    this.reg(this.weeklyTabBg);
 
-    this.scoreTabText = scene.add
-      .text(CX + TAB_W / 2, TAB_Y, '점수 미션', {
+    this.weeklyTabText = scene.add
+      .text(CX + TAB_W / 2, TAB_Y, '주간', {
         fontSize: '40px', fontStyle: 'bold', color: '#ffffff',
       })
       .setOrigin(0.5).setScrollFactor(0).setDepth(DEPTH.POPUP)
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.showTab('score'));
-    this.reg(this.scoreTabText);
+      .on('pointerdown', () => this.showTab('weekly'));
+    this.reg(this.weeklyTabText);
 
     const divG = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPUP);
     divG.lineStyle(1, 0x334466, 0.6);
@@ -209,21 +320,21 @@ export class MissionPopup {
     divG.strokePath();
     this.reg(divG);
 
-    this.drawTabBgs('landing');
+    this.drawTabBgs('daily');
   }
 
   private showTab(tab: TabKey): void {
     this.currentTab = tab;
-    const showLanding = tab === 'landing';
-    this.landingTabObjs.forEach((o) => { if ('setVisible' in o) (o as Phaser.GameObjects.GameObject & { setVisible: (v: boolean) => void }).setVisible(showLanding); });
-    this.scoreTabObjs.forEach((o)   => { if ('setVisible' in o) (o as Phaser.GameObjects.GameObject & { setVisible: (v: boolean) => void }).setVisible(!showLanding); });
+    const showDaily = tab === 'daily';
+    this.dailyTabObjs.forEach((o)  => { if ('setVisible' in o) (o as Phaser.GameObjects.GameObject & { setVisible: (v: boolean) => void }).setVisible(showDaily); });
+    this.weeklyTabObjs.forEach((o) => { if ('setVisible' in o) (o as Phaser.GameObjects.GameObject & { setVisible: (v: boolean) => void }).setVisible(!showDaily); });
     this.drawTabBgs(tab);
     this.refreshClaimAllBtn();
   }
 
   private refreshClaimAllBtn(): void {
     if (!this.claimAllBtn) return;
-    const rows = this.currentTab === 'landing' ? this.landingClaimableRows : this.scoreClaimableRows;
+    const rows = this.currentTab === 'daily' ? this.dailyClaimableRows : this.weeklyClaimableRows;
     const active = rows.length >= 2;
     this.claimAllBtn.setStyle({
       color:           active ? '#ffffff' : '#555566',
@@ -254,14 +365,26 @@ export class MissionPopup {
       }
     };
 
-    drawTab(this.landingTabBg, CX - HALF_W / 2, active === 'landing');
-    drawTab(this.scoreTabBg,   CX + HALF_W / 2, active === 'score');
+    drawTab(this.dailyTabBg,  CX - HALF_W / 2, active === 'daily');
+    drawTab(this.weeklyTabBg, CX + HALF_W / 2, active === 'weekly');
 
-    this.landingTabText.setColor(active === 'landing' ? '#ffffff' : '#667788');
-    this.scoreTabText.setColor(active === 'score'    ? '#ffffff' : '#667788');
+    this.dailyTabText.setColor(active === 'daily'   ? '#ffffff' : '#667788');
+    this.weeklyTabText.setColor(active === 'weekly'  ? '#ffffff' : '#667788');
   }
 
   // ─── 미션 행 ─────────────────────────────────────────────
+
+  /**
+   * 보상 텍스트 문자열 생성 헬퍼.
+   * 코인, 조각, 부활권 중 0이 아닌 것만 표시.
+   */
+  private rewardText(mission: MissionDef): string {
+    const parts: string[] = [];
+    if (mission.coinReward    > 0) parts.push(`🪙+${mission.coinReward}`);
+    if (mission.fragmentReward > 0) parts.push(`🧩+${mission.fragmentReward}`);
+    if (mission.revivalReward  > 0) parts.push(`🎟️+${mission.revivalReward}`);
+    return parts.join('  ') || '보상 없음';
+  }
 
   private buildRow(
     scene: Phaser.Scene,
@@ -309,7 +432,7 @@ export class MissionPopup {
         })
         .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
       const rewardClaimed = scene.add
-        .text(ROW_RIGHT - 20, rowCY + 16, `🪙 ${mission.coinReward}`, {
+        .text(ROW_RIGHT - 20, rowCY + 16, this.rewardText(mission), {
           fontSize: '26px', color: '#3d6650',
         })
         .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
@@ -319,9 +442,9 @@ export class MissionPopup {
     } else if (isComplete) {
       // ── 수령 버튼 ────────────────────────────────────────
       const claimBtn = scene.add
-        .text(ROW_RIGHT - 16, rowCY, `🪙 +${mission.coinReward}`, {
-          fontSize: '36px', fontStyle: 'bold', color: '#ffffff',
-          backgroundColor: '#bb6600', padding: { x: 18, y: 10 },
+        .text(ROW_RIGHT - 16, rowCY, this.rewardText(mission), {
+          fontSize: '34px', fontStyle: 'bold', color: '#ffffff',
+          backgroundColor: '#bb6600', padding: { x: 14, y: 10 },
         })
         .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP)
         .setInteractive({ useHandCursor: true })
@@ -330,7 +453,7 @@ export class MissionPopup {
 
       let alreadyClaimed = false;
 
-      const doClaimRow = () => {
+      const doClaimRow = (): void => {
         if (alreadyClaimed) return;
         alreadyClaimed = true;
         claimBtn.setVisible(false);
@@ -347,7 +470,7 @@ export class MissionPopup {
           })
           .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
         const rewardDone = scene.add
-          .text(ROW_RIGHT - 20, rowCY + 16, `🪙 ${mission.coinReward}`, {
+          .text(ROW_RIGHT - 20, rowCY + 16, this.rewardText(mission), {
             fontSize: '26px', color: '#3d6650',
           })
           .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
@@ -387,8 +510,8 @@ export class MissionPopup {
         .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
 
       const rewardHint = scene.add
-        .text(ROW_RIGHT - 16, rowCY - 20, `🪙 ${mission.coinReward}`, {
-          fontSize: '28px', color: '#997722',
+        .text(ROW_RIGHT - 16, rowCY - 20, this.rewardText(mission), {
+          fontSize: '26px', color: '#997722',
         })
         .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
 
@@ -404,3 +527,6 @@ export class MissionPopup {
     return obj;
   }
 }
+
+// ClaimResult 타입은 내부에서만 사용되지만 명시적으로 export하지 않음
+export type { ClaimResult };

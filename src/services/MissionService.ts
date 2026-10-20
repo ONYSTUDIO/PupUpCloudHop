@@ -9,8 +9,9 @@ export interface ClaimedMissionKey {
 export class MissionService {
   /** 단일 미션 수령. 반환값: 실제 지급된 코인 (이미 수령했으면 0). */
   async claimMission(mission: MissionDef): Promise<number> {
+    const missionType = mission.type != null ? MISSION_TYPE_ID[mission.type] : 0;
     const { data, error } = await supabase.rpc('claim_mission', {
-      p_mission_type: MISSION_TYPE_ID[mission.type],
+      p_mission_type: missionType,
       p_mission_id:   mission.stage,
       p_coin_reward:  mission.coinReward,
     });
@@ -21,7 +22,7 @@ export class MissionService {
   /** 미션 일괄 수령 (한 번에 획득). 반환값: 총 지급된 코인. */
   async claimAllMissions(missions: MissionDef[]): Promise<number> {
     const payload = missions.map((m) => ({
-      mission_type: MISSION_TYPE_ID[m.type],
+      mission_type: m.type != null ? MISSION_TYPE_ID[m.type] : 0,
       mission_id:   m.stage,
       coin_reward:  m.coinReward,
     }));
