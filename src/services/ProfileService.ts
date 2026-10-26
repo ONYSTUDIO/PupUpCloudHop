@@ -51,6 +51,13 @@ export class ProfileService {
     }
   }
 
+  /** 아이템 조각 획득. 반환값: 변경 후 잔액. */
+  async addFragments(amount: number): Promise<number> {
+    const { data, error } = await supabase.rpc('add_fragments', { amount });
+    if (error) throw error;
+    return data as number;
+  }
+
   /** 다이아몬드 → 코인 단방향 교환 (💎1 = 🪙150) */
   async exchangeDiamondsToCoins(diamondAmount: number): Promise<boolean> {
     const spent = await this.spendDiamonds(diamondAmount);

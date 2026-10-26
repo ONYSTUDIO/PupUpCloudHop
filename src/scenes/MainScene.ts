@@ -400,6 +400,7 @@ export class MainScene extends Phaser.Scene {
         this.missionPopup = null;
         this.refreshMissionBadge();
       },
+      missionService,
     );
   }
 

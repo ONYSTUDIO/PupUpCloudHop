@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/baseDimensions';
 import { DEPTH } from '@config/constants';
 import type { SaveManager } from '@managers/SaveManager';
+import { profileService } from '@services/ProfileService';
+import { inventoryService } from '@services/InventoryService';
 
 const CX = BASE_WIDTH / 2;
 
@@ -24,11 +26,11 @@ const CLOSE_BTN_Y = PANEL_B - 90;
 const REWARD_DEFS = [
   { icon: '🪙', val: '30' },
   { icon: '🪙', val: '50' },
-  { icon: '🛡️', val: '방어막' },
   { icon: '🪙', val: '80' },
-  { icon: '💫', val: '부활' },
+  { icon: '🪙', val: '80' },
+  { icon: '🧩', val: '×10' },
   { icon: '🪙', val: '100' },
-  { icon: '💎', val: '×3' },
+  { icon: '🎟️', val: '+🪙200' },
 ] as const;
 
 function cellCX(i: number): number {
@@ -133,8 +135,25 @@ export class AttendancePopup {
       .on('pointerdown', () => {
         if (claimed || this.destroyed) return;
         claimed = true;
-        saveManager.claimAttendance();
+        const reward = saveManager.claimAttendance();
         onClaimed();
+
+        // DB 백그라운드 동기화 (낙관적, 실패해도 UI에 영향 없음)
+        if (reward.coins > 0) {
+          profileService.addCoins(reward.coins).catch((e: unknown) => {
+            console.warn('[Attendance] coin sync failed', e);
+          });
+        }
+        if (reward.fragments > 0) {
+          profileService.addFragments(reward.fragments).catch((e: unknown) => {
+            console.warn('[Attendance] fragment sync failed', e);
+          });
+        }
+        if (reward.revival > 0) {
+          inventoryService.addItem('revival', reward.revival).catch((e: unknown) => {
+            console.warn('[Attendance] revival sync failed', e);
+          });
+        }
 
         drawClaimBg(false);
         claimBtnTxt

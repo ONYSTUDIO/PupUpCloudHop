@@ -4,8 +4,6 @@ import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 import { SaveManager } from '@managers/SaveManager';
 import { profileService } from '@services/ProfileService';
 import { inventoryService } from '@services/InventoryService';
-import type { ItemType } from '@services/InventoryService';
-
 interface RouletteSceneData {
   from?: string;
 }
@@ -13,21 +11,21 @@ interface RouletteSceneData {
 interface RewardSlot {
   wheelLabel: string;
   popupLabel: string;
-  type: 'coins' | 'diamonds' | 'shield' | 'magnet';
+  type: 'coins' | 'fragments' | 'revival';
   value: number;
   bgColor: number;
   probability: number;
 }
 
 const REWARDS: RewardSlot[] = [
-  { wheelLabel: '🪙\n30',    popupLabel: '🪙 코인 30개',      type: 'coins',    value: 30,  bgColor: 0x1a3a8a, probability: 0.25 },
-  { wheelLabel: '🪙\n60',    popupLabel: '🪙 코인 60개',      type: 'coins',    value: 60,  bgColor: 0x2255bb, probability: 0.18 },
-  { wheelLabel: '🪙\n100',   popupLabel: '🪙 코인 100개',     type: 'coins',    value: 100, bgColor: 0x1a7744, probability: 0.13 },
-  { wheelLabel: '🛡️\n방어막', popupLabel: '🛡️ 방어막 1회',   type: 'shield',   value: 1,   bgColor: 0x6611aa, probability: 0.15 },
-  { wheelLabel: '🧲\n자석',   popupLabel: '🧲 자석 1회',      type: 'magnet',   value: 1,   bgColor: 0x118899, probability: 0.12 },
-  { wheelLabel: '🪙\n200',   popupLabel: '🪙 코인 200개',     type: 'coins',    value: 200, bgColor: 0xbb8800, probability: 0.08 },
-  { wheelLabel: '💎\n1개',   popupLabel: '💎 다이아몬드 1개', type: 'diamonds', value: 1,   bgColor: 0xaa1177, probability: 0.06 },
-  { wheelLabel: '💎\n3개',   popupLabel: '💎 다이아몬드 3개', type: 'diamonds', value: 3,   bgColor: 0xaa1111, probability: 0.03 },
+  { wheelLabel: '🪙\n30',      popupLabel: '🪙 코인 30개',    type: 'coins',     value: 30,  bgColor: 0x1a3a8a, probability: 0.25 },
+  { wheelLabel: '🪙\n60',      popupLabel: '🪙 코인 60개',    type: 'coins',     value: 60,  bgColor: 0x2255bb, probability: 0.18 },
+  { wheelLabel: '🧩\n5',       popupLabel: '🧩 조각 5개',     type: 'fragments', value: 5,   bgColor: 0x1a6644, probability: 0.15 },
+  { wheelLabel: '🪙\n100',     popupLabel: '🪙 코인 100개',   type: 'coins',     value: 100, bgColor: 0x1a4499, probability: 0.13 },
+  { wheelLabel: '🧩\n10',      popupLabel: '🧩 조각 10개',    type: 'fragments', value: 10,  bgColor: 0x1a6644, probability: 0.10 },
+  { wheelLabel: '🪙\n200',     popupLabel: '🪙 코인 200개',   type: 'coins',     value: 200, bgColor: 0xbb8800, probability: 0.08 },
+  { wheelLabel: '🧩\n15',      popupLabel: '🧩 조각 15개',    type: 'fragments', value: 15,  bgColor: 0x1a6644, probability: 0.07 },
+  { wheelLabel: '🎟️\n부활권',  popupLabel: '🎟️ 부활권 1개',  type: 'revival',   value: 1,   bgColor: 0x6622aa, probability: 0.04 },
 ];
 
 const SLICE = (Math.PI * 2) / 8;
@@ -323,24 +321,19 @@ export class RouletteScene extends Phaser.Scene {
   }
 
   private applyReward(r: RewardSlot): void {
-    // 로컬 즉시 반영
-    if (r.type === 'coins')    this.saveManager.addCoins(r.value);
-    if (r.type === 'diamonds') this.saveManager.addDiamonds(r.value);
-    if (r.type === 'shield')   this.saveManager.addShieldItem(r.value);
-    if (r.type === 'magnet')   this.saveManager.addMagnetItem(r.value);
+    if (r.type === 'coins')     this.saveManager.addCoins(r.value);
+    if (r.type === 'fragments') this.saveManager.addFragments(r.value);
+    if (r.type === 'revival')   this.saveManager.addRevivalItem(r.value);
 
-    // Supabase 백그라운드 동기화 (실패해도 게임 진행에 영향 없음)
     this.syncRewardToSupabase(r).catch((e: unknown) => {
       console.warn('[Roulette] Supabase sync failed:', e);
     });
   }
 
   private async syncRewardToSupabase(r: RewardSlot): Promise<void> {
-    if (r.type === 'coins')    await profileService.addCoins(r.value);
-    if (r.type === 'diamonds') await profileService.addDiamonds(r.value);
-    if (r.type === 'shield' || r.type === 'magnet') {
-      await inventoryService.addItem(r.type as ItemType, r.value);
-    }
+    if (r.type === 'coins')     await profileService.addCoins(r.value);
+    if (r.type === 'fragments') await profileService.addFragments(r.value);
+    if (r.type === 'revival')   await inventoryService.addItem('revival', r.value);
   }
 
   // ── Reward popup ──────────────────────────────────────────────

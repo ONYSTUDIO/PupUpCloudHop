@@ -9,7 +9,9 @@ import {
   type MissionDef,
 } from '@config/missions';
 import type { SaveManager } from '@managers/SaveManager';
-import { missionService } from '@services/MissionService';
+import { missionService, type MissionService } from '@services/MissionService';
+import { profileService } from '@services/ProfileService';
+import { inventoryService } from '@services/InventoryService';
 
 const CX = BASE_WIDTH / 2;
 const PANEL_W = 760;
@@ -52,6 +54,9 @@ export class MissionPopup {
   // 탭별 수령 가능 행 트리거 목록
   private dailyClaimableRows:  Array<() => void> = [];
   private weeklyClaimableRows: Array<() => void> = [];
+  // DB 동기화 후 시각 업데이트용 (mission id → doClaimRow)
+  private dailyRowTriggerMap  = new Map<string, () => void>();
+  private weeklyRowTriggerMap = new Map<string, () => void>();
   private currentTab: TabKey = 'daily';
   private claimAllBtn: Phaser.GameObjects.Text | null = null;
 
@@ -60,10 +65,16 @@ export class MissionPopup {
     saveManager: SaveManager,
     onCoinsChanged: () => void,
     onClose: () => void,
+    ms: MissionService,
   ) {
     // 팝업 열릴 때 리셋 체크
     saveManager.checkAndResetDailyMissions();
     saveManager.checkAndResetWeeklyMissions();
+
+    // 백그라운드 DB 동기화 — 실패해도 로컬 상태로 동작
+    this.syncClaimedFromDb(saveManager, ms, onCoinsChanged).catch((e: unknown) => {
+      console.warn('[MissionPopup] DB sync failed', e);
+    });
 
     // ── dim ────────────────────────────────────────────────
     this.reg(
@@ -90,10 +101,10 @@ export class MissionPopup {
     this.buildTabs(scene);
 
     // ── 일일 탭 콘텐츠 ─────────────────────────────────────
-    this.buildDailyTab(scene, saveManager, onCoinsChanged);
+    this.buildDailyTab(scene, saveManager, onCoinsChanged, ms);
 
     // ── 주간 탭 콘텐츠 ─────────────────────────────────────
-    this.buildWeeklyTab(scene, saveManager, onCoinsChanged);
+    this.buildWeeklyTab(scene, saveManager, onCoinsChanged, ms);
 
     // ── 모두 수령 버튼 ─────────────────────────────────────
     this.claimAllBtn = scene.add
@@ -141,12 +152,59 @@ export class MissionPopup {
     this.objs = [];
   }
 
+  // ─── DB 동기화 ───────────────────────────────────────────
+
+  private async syncClaimedFromDb(
+    saveManager: SaveManager,
+    ms: MissionService,
+    onCoinsChanged: () => void,
+  ): Promise<void> {
+    const today  = saveManager.todayString();
+    const monday = saveManager.mondayString();
+
+    const [dailyClaimed, weeklyClaimed] = await Promise.all([
+      ms.getClaimedTimedMissions(today),
+      ms.getClaimedTimedMissions(monday),
+    ]);
+
+    // 팝업이 이미 닫혔거나 자정을 넘겨 날짜가 바뀌었으면 중단 (stale 보상 재지급 방지)
+    if (this.destroyed) return;
+    if (today !== saveManager.todayString() || monday !== saveManager.mondayString()) return;
+
+    // DB에서 수령된 미션을 로컬에도 반영(보상 포함)하고, 새로 동기화된 행은 시각적으로도 완료 처리
+    for (const id of dailyClaimed) {
+      const reward = saveManager.forceDailyMissionClaimed(id);
+      if (reward !== null) {
+        if (reward.coins > 0 || reward.fragments > 0 || reward.revival > 0) {
+          onCoinsChanged();
+          if (reward.coins     > 0) profileService.addCoins(reward.coins).catch((e: unknown) => { console.warn('[Mission] coin sync', e); });
+          if (reward.fragments > 0) profileService.addFragments(reward.fragments).catch((e: unknown) => { console.warn('[Mission] fragment sync', e); });
+          if (reward.revival   > 0) inventoryService.addItem('revival', reward.revival).catch((e: unknown) => { console.warn('[Mission] revival sync', e); });
+        }
+        this.dailyRowTriggerMap.get(id)?.();
+      }
+    }
+    for (const id of weeklyClaimed) {
+      const reward = saveManager.forceWeeklyMissionClaimed(id);
+      if (reward !== null) {
+        if (reward.coins > 0 || reward.fragments > 0 || reward.revival > 0) {
+          onCoinsChanged();
+          if (reward.coins     > 0) profileService.addCoins(reward.coins).catch((e: unknown) => { console.warn('[Mission] coin sync', e); });
+          if (reward.fragments > 0) profileService.addFragments(reward.fragments).catch((e: unknown) => { console.warn('[Mission] fragment sync', e); });
+          if (reward.revival   > 0) inventoryService.addItem('revival', reward.revival).catch((e: unknown) => { console.warn('[Mission] revival sync', e); });
+        }
+        this.weeklyRowTriggerMap.get(id)?.();
+      }
+    }
+  }
+
   // ─── 일일 탭 빌드 ────────────────────────────────────────
 
   private buildDailyTab(
     scene: Phaser.Scene,
     saveManager: SaveManager,
     onCoinsChanged: () => void,
+    ms: MissionService,
   ): void {
     // 리셋 타이머 텍스트
     const resetLabel = scene.add
@@ -163,23 +221,34 @@ export class MissionPopup {
       const progress = saveManager.getDailyMissionProgress(m.id);
       const isClaimed = saveManager.isDailyMissionClaimed(m.id);
 
-      const { objs, triggerClaim } = this.buildRow(
+      const { objs, triggerClaim, forceClaimedTrigger } = this.buildRow(
         scene, m, firstRowCY(i), progress, isClaimed, this.dailyTabObjs,
         () => {
           const reward = saveManager.claimDailyMission(m.id);
+          if (myTrigger) {
+            const idx = this.dailyClaimableRows.indexOf(myTrigger);
+            if (idx >= 0) this.dailyClaimableRows.splice(idx, 1);
+          }
+          this.refreshClaimAllBtn();
           if (reward.coins > 0 || reward.fragments > 0 || reward.revival > 0) {
             onCoinsChanged();
-            if (myTrigger) {
-              const idx = this.dailyClaimableRows.indexOf(myTrigger);
-              if (idx >= 0) this.dailyClaimableRows.splice(idx, 1);
-            }
-            this.refreshClaimAllBtn();
+            ms.claimTimedMission(m, saveManager.todayString()).catch((e: unknown) => {
+              console.warn('[MissionService] timed claim failed', e);
+            });
+            if (reward.coins     > 0) profileService.addCoins(reward.coins).catch((e: unknown) => { console.warn('[Mission] coin sync', e); });
+            if (reward.fragments > 0) profileService.addFragments(reward.fragments).catch((e: unknown) => { console.warn('[Mission] fragment sync', e); });
+            if (reward.revival   > 0) inventoryService.addItem('revival', reward.revival).catch((e: unknown) => { console.warn('[Mission] revival sync', e); });
           }
         },
       );
       myTrigger = triggerClaim;
       objs.forEach((o) => { this.reg(o); this.dailyTabObjs.push(o); });
-      if (triggerClaim) this.dailyClaimableRows.push(triggerClaim);
+      if (triggerClaim) {
+        this.dailyClaimableRows.push(triggerClaim);
+        this.dailyRowTriggerMap.set(m.id, triggerClaim);
+      } else if (forceClaimedTrigger) {
+        this.dailyRowTriggerMap.set(m.id, forceClaimedTrigger);
+      }
     });
 
     // 구분선 + 장기 목표 헤더
@@ -246,6 +315,7 @@ export class MissionPopup {
     scene: Phaser.Scene,
     saveManager: SaveManager,
     onCoinsChanged: () => void,
+    ms: MissionService,
   ): void {
     // 리셋 텍스트
     const resetLabel = scene.add
@@ -262,23 +332,34 @@ export class MissionPopup {
       const progress  = saveManager.getWeeklyMissionProgress(m.id);
       const isClaimed = saveManager.isWeeklyMissionClaimed(m.id);
 
-      const { objs, triggerClaim } = this.buildRow(
+      const { objs, triggerClaim, forceClaimedTrigger } = this.buildRow(
         scene, m, firstRowCY(i), progress, isClaimed, this.weeklyTabObjs,
         () => {
           const reward = saveManager.claimWeeklyMission(m.id);
+          if (myTrigger) {
+            const idx = this.weeklyClaimableRows.indexOf(myTrigger);
+            if (idx >= 0) this.weeklyClaimableRows.splice(idx, 1);
+          }
+          this.refreshClaimAllBtn();
           if (reward.coins > 0 || reward.fragments > 0 || reward.revival > 0) {
             onCoinsChanged();
-            if (myTrigger) {
-              const idx = this.weeklyClaimableRows.indexOf(myTrigger);
-              if (idx >= 0) this.weeklyClaimableRows.splice(idx, 1);
-            }
-            this.refreshClaimAllBtn();
+            ms.claimTimedMission(m, saveManager.mondayString()).catch((e: unknown) => {
+              console.warn('[MissionService] timed claim failed', e);
+            });
+            if (reward.coins     > 0) profileService.addCoins(reward.coins).catch((e: unknown) => { console.warn('[Mission] coin sync', e); });
+            if (reward.fragments > 0) profileService.addFragments(reward.fragments).catch((e: unknown) => { console.warn('[Mission] fragment sync', e); });
+            if (reward.revival   > 0) inventoryService.addItem('revival', reward.revival).catch((e: unknown) => { console.warn('[Mission] revival sync', e); });
           }
         },
       );
       myTrigger = triggerClaim;
       objs.forEach((o) => { this.reg(o); this.weeklyTabObjs.push(o); });
-      if (triggerClaim) this.weeklyClaimableRows.push(triggerClaim);
+      if (triggerClaim) {
+        this.weeklyClaimableRows.push(triggerClaim);
+        this.weeklyRowTriggerMap.set(m.id, triggerClaim);
+      } else if (forceClaimedTrigger) {
+        this.weeklyRowTriggerMap.set(m.id, forceClaimedTrigger);
+      }
     });
   }
 
@@ -394,7 +475,7 @@ export class MissionPopup {
     isClaimed: boolean,
     tabObjs: Phaser.GameObjects.GameObject[],
     onClaim: () => void,
-  ): { objs: Phaser.GameObjects.GameObject[]; triggerClaim?: () => void } {
+  ): { objs: Phaser.GameObjects.GameObject[]; triggerClaim?: () => void; forceClaimedTrigger?: () => void } {
     const isComplete = progress >= mission.target;
     const ratio = Math.min(1, progress / mission.target);
 
@@ -454,7 +535,7 @@ export class MissionPopup {
       let alreadyClaimed = false;
 
       const doClaimRow = (): void => {
-        if (alreadyClaimed) return;
+        if (alreadyClaimed || this.destroyed) return;
         alreadyClaimed = true;
         claimBtn.setVisible(false);
         bgG.clear();
@@ -516,7 +597,36 @@ export class MissionPopup {
         .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
 
       rowObjs.push(rewardHint, barG, progressText);
-      return { objs: rowObjs };
+
+      // DB 동기화로 강제 완료 처리가 필요할 때 진행바 → 완료 행으로 전환
+      const forceClaimedTrigger = (): void => {
+        if (this.destroyed) return;
+        barG.destroy();
+        progressText.destroy();
+        rewardHint.destroy();
+        bgG.clear();
+        bgG.fillStyle(0x0f2216, 0.9);
+        bgG.fillRoundedRect(ROW_LEFT, rowCY - ROW_H / 2, ROW_W, ROW_H, 12);
+        bgG.lineStyle(2, 0x336644, 0.9);
+        bgG.strokeRoundedRect(ROW_LEFT, rowCY - ROW_H / 2, ROW_W, ROW_H, 12);
+        statusIcon.setText('✓').setColor('#44bb66');
+        label.setColor('#557766');
+        label.setY(rowCY); // 진행바 상태일 때 rowCY-14이었던 위치를 중앙으로 보정
+        const doneText = scene.add
+          .text(ROW_RIGHT - 20, rowCY - 12, '완료', {
+            fontSize: '34px', color: '#44bb66', fontStyle: 'bold',
+          })
+          .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
+        const rewardDone = scene.add
+          .text(ROW_RIGHT - 20, rowCY + 16, this.rewardText(mission), {
+            fontSize: '26px', color: '#3d6650',
+          })
+          .setOrigin(1, 0.5).setScrollFactor(0).setDepth(DEPTH.POPUP);
+        this.objs.push(doneText, rewardDone);
+        tabObjs.push(doneText, rewardDone);
+      };
+
+      return { objs: rowObjs, forceClaimedTrigger };
     }
   }
 

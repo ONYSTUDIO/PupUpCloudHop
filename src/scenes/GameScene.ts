@@ -21,6 +21,7 @@ import { InputManager } from '@managers/InputManager';
 import { SaveManager } from '@managers/SaveManager';
 import { HAPTICS_CONFIG } from '@config/hapticsConfig';
 import { authService } from '../services/AuthService';
+import { profileService } from '@services/ProfileService';
 import { TopHud } from '@ui/TopHud';
 import { ScoreHud } from '@ui/ScoreHud';
 import { PausePopup } from '@ui/PausePopup';
@@ -1292,6 +1293,7 @@ export class GameScene extends Phaser.Scene {
     // 별 착지 수집 — 해당 구름에 별이 있으면 로켓 모드 발동 (shake 제외)
     if (this.starItemSystem.checkLanding(cloud)) {
       this.saveManager.recordItemPickup();
+      profileService.addFragments(1).catch(() => { /* 낙관적 업데이트, 실패 무시 */ });
       this.startRocketMode();
       return;
     }
@@ -1304,6 +1306,7 @@ export class GameScene extends Phaser.Scene {
     // 자석 아이템 수집 — 자석 효과 활성화
     if (this.magnetItemSystem.checkLanding(cloud)) {
       this.saveManager.recordItemPickup();
+      profileService.addFragments(1).catch(() => { /* 낙관적 업데이트, 실패 무시 */ });
       this.magnetSystem.activate();
       this.scoreHud.showMagnetTimer(this.magnetSystem.timer);
     }
@@ -1311,6 +1314,7 @@ export class GameScene extends Phaser.Scene {
     // 얼음 아이템 수집 — 구름 동결 + 장애물 홀딩 효과 활성화
     if (this.iceItemSystem.checkLanding(cloud)) {
       this.saveManager.recordItemPickup();
+      profileService.addFragments(1).catch(() => { /* 낙관적 업데이트, 실패 무시 */ });
       this.cloudFreezeSystem.activate(this.clouds);
       this.obstacleSystem.freeze();
       this.scoreHud.showFreezeTimer(this.cloudFreezeSystem.timer);
@@ -1319,6 +1323,7 @@ export class GameScene extends Phaser.Scene {
     // 타임슬로우 아이템 수집 — 게임 세계 속도 절반으로 감소
     if (this.timeSlowItemSystem.checkLanding(cloud)) {
       this.saveManager.recordItemPickup();
+      profileService.addFragments(1).catch(() => { /* 낙관적 업데이트, 실패 무시 */ });
       this.timeSlowSystem.activate();
       this.scoreHud.showSlowTimer(this.timeSlowSystem.timer);
     }

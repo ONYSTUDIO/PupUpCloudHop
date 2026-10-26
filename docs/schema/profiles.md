@@ -15,6 +15,7 @@ Supabase Auth의 `auth.users`와 1:1 연결. 구글/애플/페이스북 OAuth �
 | `login_type` | smallint | 0 | 로그인 방식 (0=게스트, 1=Google, 2=Apple, 3=Facebook) |
 | `coins` | integer | 0 | 소프트 커런시 (코인) |
 | `diamonds` | integer | 0 | 하드 커런시 (다이아몬드) |
+| `fragments` | integer | 0 | 아이템 조각 재화. 미션·출석·인게임 픽업으로 획득. 0 이상 제약 |
 | `best_score` | integer | 0 | 역대 최고 점수 |
 | `best_landings` | integer | 0 | 단일 판 최고 착지 횟수. 착지 미션 달성 판별에 사용 |
 | `total_play_count` | integer | 0 | 총 플레이 횟수 |
@@ -42,6 +43,7 @@ Supabase Auth의 `auth.users`와 1:1 연결. 구글/애플/페이스북 OAuth �
 |------|------|------|
 | `add_coins(amount int)` | integer | 코인 증감 (음수 가능, 동시성 안전) |
 | `add_diamonds(amount int)` | integer | 다이아몬드 증감 (음수 가능, 동시성 안전) |
+| `add_fragments(amount int)` | integer | 아이템 조각 증감 (음수 가능, 동시성 안전) |
 | `record_free_roulette()` | void | 무료 스핀 사용 기록 (날짜 갱신, 유료 횟수 리셋) |
 | `spend_paid_roulette()` | integer | 유료 스핀 다이아 차감. 잔액 부족·소진 시 에러 |
 
@@ -164,6 +166,27 @@ begin
   return new_diamonds;
 end;
 $$;
+
+-- fragments 컬럼 및 RPC 추가 (add_fragments_timed_missions.md 참고)
+alter table public.profiles
+  add column fragments integer not null default 0 check (fragments >= 0);
+
+comment on column public.profiles.fragments is
+  '아이템 조각 재화. 미션·출석·인게임 아이템 픽업으로 획득. 0 이상 제약';
+
+create or replace function public.add_fragments(amount integer)
+returns integer
+language plpgsql security definer
+as $$
+declare new_fragments integer;
+begin
+  update public.profiles
+  set fragments = fragments + amount
+  where id = auth.uid()
+  returning fragments into new_fragments;
+  return new_fragments;
+end;
+$$;
 ```
 
 ---
@@ -172,6 +195,7 @@ $$;
 
 - [룰렛 상태 마이그레이션](./add_roulette_state.md)
 - [미션 수령 테이블 + best_landings 마이그레이션](./claimed_missions.md)
+- [fragments 컬럼 + 일일/주간 미션 마이그레이션](./add_fragments_timed_missions.md)
 - [player_inventory 테이블](./player_inventory.md)
 - [재화 시스템 설계](../CURRENCY_DESIGN.md)
 - [기술 스택](../TECH_STACK.md)

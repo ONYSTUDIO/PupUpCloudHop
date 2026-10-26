@@ -119,6 +119,10 @@ export interface Database {
         Args: Record<string, never>;
         Returns: number;
       };
+      add_fragments: {
+        Args: { amount: number };
+        Returns: number;
+      };
       add_item: {
         Args: { p_item_type: string; p_amount: number };
         Returns: number;
@@ -136,6 +140,28 @@ export interface Database {
         Returns: Json;   // [{ mission_type: number; mission_id: number }]
       };
       reset_claimed_missions: {
+        Args: Record<string, never>;
+        Returns: void;
+      };
+      claim_timed_mission: {
+        Args: {
+          p_mission_id: string;
+          p_period_key: string;
+          p_coin_reward: number;
+          p_fragment_reward: number;
+          p_revival_reward: number;
+        };
+        Returns: Json; // { coins, fragments, revivals, already_claimed }
+      };
+      get_claimed_timed_missions: {
+        Args: { p_period_key: string };
+        Returns: Json; // string[]
+      };
+      reset_timed_missions: {
+        Args: { p_period_key: string };
+        Returns: void;
+      };
+      reset_all_timed_missions: {
         Args: Record<string, never>;
         Returns: void;
       };

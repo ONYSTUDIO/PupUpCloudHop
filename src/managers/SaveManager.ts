@@ -110,7 +110,7 @@ export class SaveManager {
 
   // ─── 룰렛 ────────────────────────────────────────────────
 
-  private todayString(): string {
+  todayString(): string {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
@@ -125,7 +125,7 @@ export class SaveManager {
    * 이번 주 월요일의 'YYYY-MM-DD' 문자열 반환.
    * 주 기준: 월요일 시작.
    */
-  private mondayString(): string {
+  mondayString(): string {
     const d = new Date();
     const day = d.getDay(); // 0=일, 1=월 ...
     const diff = day === 0 ? -6 : 1 - day; // 이번 주 월요일로 이동
@@ -363,7 +363,8 @@ export class SaveManager {
 
     // 일일 진행도 업데이트
     this.data.dailyLandingCount += landingCount;
-    if (score >= 20) this.data.dailyScoreReached = true;
+    const scoreTarget = DAILY_MISSIONS.find((m) => m.id === 'daily_score_20')?.target ?? 20;
+    if (score >= scoreTarget) this.data.dailyScoreReached = true;
 
     // 주간 진행도 업데이트
     this.data.weeklyTotalLandings += landingCount;
@@ -390,7 +391,10 @@ export class SaveManager {
   getDailyMissionProgress(id: string): number {
     switch (id) {
       case 'daily_land_10':  return this.data.dailyLandingCount ?? 0;
-      case 'daily_score_20': return (this.data.dailyScoreReached ?? false) ? 20 : 0;
+      case 'daily_score_20': {
+        const t = DAILY_MISSIONS.find((m) => m.id === 'daily_score_20')?.target ?? 20;
+        return (this.data.dailyScoreReached ?? false) ? t : 0;
+      }
       case 'daily_item_1':   return (this.data.dailyItemPickedUp ?? false) ? 1 : 0;
       default:               return 0;
     }
@@ -497,12 +501,14 @@ export class SaveManager {
   }
 
   /**
-   * 오늘 출석 보상 지급 및 상태 갱신. 이미 수령했으면 무시.
+   * 오늘 출석 보상 지급 및 상태 갱신.
+   * 반환값: 실제 지급한 보상. 이미 수령한 날이면 { coins: 0, fragments: 0, revival: 0 }.
    * docs/ECONOMY_DESIGN.md 기준 출석 보상 배열.
    */
-  claimAttendance(): void {
+  claimAttendance(): { coins: number; fragments: number; revival: number } {
+    const empty = { coins: 0, fragments: 0, revival: 0 };
     const today = this.todayString();
-    if (this.data.lastAttendanceDate === today) return;
+    if (this.data.lastAttendanceDate === today) return empty;
 
     const yesterday = this.yesterdayString();
     let newStreak: number;
@@ -525,7 +531,7 @@ export class SaveManager {
 
     const dayIndex = newStreak - 1;
     // day 3(index 2): coins:80, day 5(index 4): fragments:10, day 7(index 6): revival:1+coins:200
-    const REWARDS = [
+    const ATTENDANCE_REWARDS = [
       { coins: 30 },
       { coins: 50 },
       { coins: 80 },
@@ -535,15 +541,18 @@ export class SaveManager {
       { revival: 1, coins: 200 },
     ] as const;
 
-    const r = REWARDS[dayIndex]!;
-    if ('coins'     in r) this.addCoins(r.coins);
-    if ('fragments' in r) this.addFragments(r.fragments);
-    if ('revival'   in r) this.addRevivalItem(r.revival);
+    const r = ATTENDANCE_REWARDS[dayIndex]!;
+    const result = { coins: 0, fragments: 0, revival: 0 };
+
+    if ('coins'     in r) { this.addCoins(r.coins);           result.coins     = r.coins;     }
+    if ('fragments' in r) { this.addFragments(r.fragments);   result.fragments = r.fragments; }
+    if ('revival'   in r) { this.addRevivalItem(r.revival);   result.revival   = r.revival;   }
 
     this.data.attendanceStreak = newStreak;
     this.data.attendanceDayClaimed[dayIndex] = true;
     this.data.lastAttendanceDate = today;
     this.persist();
+    return result;
   }
 
   /** [테스트용] 출석 상태를 초기화해 다시 팝업이 뜨도록 한다. */
@@ -572,6 +581,39 @@ export class SaveManager {
   resetWeeklyMissions(): void {
     this.data.lastWeeklyReset = '';
     this.persist();
+  }
+
+  /** DB에서 수령됐음을 로컬에 반영하고 보상도 지급. 이미 기록됐거나 알 수 없는 ID면 null 반환. */
+  forceDailyMissionClaimed(id: string): { coins: number; fragments: number; revival: number } | null {
+    if ((this.data.dailyMissionClaimed ?? []).includes(id)) return null;
+    const mission = DAILY_MISSIONS.find((m) => m.id === id);
+    if (!mission) return null; // 알 수 없는 ID(월요일 weekly ID 혼입 등)는 무시
+    this.data.dailyMissionClaimed = [...(this.data.dailyMissionClaimed ?? []), id];
+    const result = { coins: 0, fragments: 0, revival: 0 };
+    if (mission.coinReward     > 0) { this.addCoins(mission.coinReward);          result.coins     = mission.coinReward; }
+    if (mission.fragmentReward > 0) { this.addFragments(mission.fragmentReward);  result.fragments = mission.fragmentReward; }
+    if (mission.revivalReward  > 0) { this.addRevivalItem(mission.revivalReward); result.revival   = mission.revivalReward; }
+    const allDailyIds = DAILY_MISSIONS.map((m) => m.id);
+    const allClaimed = allDailyIds.every((mid) => this.data.dailyMissionClaimed.includes(mid));
+    if (allClaimed) {
+      this.data.weeklyDailyMissionDaysCompleted = (this.data.weeklyDailyMissionDaysCompleted ?? 0) + 1;
+    }
+    this.persist();
+    return result;
+  }
+
+  /** DB에서 수령됐음을 로컬에 반영하고 보상도 지급. 이미 기록됐거나 알 수 없는 ID면 null 반환. */
+  forceWeeklyMissionClaimed(id: string): { coins: number; fragments: number; revival: number } | null {
+    if ((this.data.weeklyMissionClaimed ?? []).includes(id)) return null;
+    const mission = WEEKLY_MISSIONS.find((m) => m.id === id);
+    if (!mission) return null; // 알 수 없는 ID는 무시
+    this.data.weeklyMissionClaimed = [...(this.data.weeklyMissionClaimed ?? []), id];
+    const result = { coins: 0, fragments: 0, revival: 0 };
+    if (mission.coinReward     > 0) { this.addCoins(mission.coinReward);          result.coins     = mission.coinReward; }
+    if (mission.fragmentReward > 0) { this.addFragments(mission.fragmentReward);  result.fragments = mission.fragmentReward; }
+    if (mission.revivalReward  > 0) { this.addRevivalItem(mission.revivalReward); result.revival   = mission.revivalReward; }
+    this.persist();
+    return result;
   }
 
   /**
