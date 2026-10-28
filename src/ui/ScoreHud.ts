@@ -15,11 +15,11 @@ const BEST_Y  = SCORE_Y + 112;
 
 // 로켓 타이머 (점수 아래)
 const ROCKET_TEXT_Y = BEST_Y + 60;
-const ROCKET_BAR_Y  = ROCKET_TEXT_Y + 62;
+const ROCKET_BAR_Y  = ROCKET_TEXT_Y + 82;
 
 // 자석 타이머 (로켓 타이머 아래)
 const MAGNET_TEXT_Y = ROCKET_BAR_Y + 52;
-const MAGNET_BAR_Y  = MAGNET_TEXT_Y + 54;
+const MAGNET_BAR_Y  = MAGNET_TEXT_Y + 82;
 
 // 구름 동결 타이머 (자석 타이머 아래)
 const FREEZE_TEXT_Y = MAGNET_BAR_Y + 52;
@@ -44,10 +44,12 @@ export class ScoreHud {
 
   // 로켓 타이머
   private rocketTimerBg: Phaser.GameObjects.Graphics | null = null;
+  private rocketTimerIcon: Phaser.GameObjects.Image | null = null;
   private rocketTimerText: Phaser.GameObjects.Text | null = null;
 
   // 자석 타이머
   private magnetTimerBg: Phaser.GameObjects.Graphics | null = null;
+  private magnetTimerIcon: Phaser.GameObjects.Image | null = null;
   private magnetTimerText: Phaser.GameObjects.Text | null = null;
 
   // 구름 동결 타이머
@@ -96,22 +98,29 @@ export class ScoreHud {
       this.rocketTimerBg = this.scene.add.graphics()
         .setScrollFactor(0).setDepth(DEPTH.HUD);
     }
+    if (!this.rocketTimerIcon) {
+      this.rocketTimerIcon = this.scene.add.image(CX - 72, ROCKET_TEXT_Y + 36, 'item_rocket')
+        .setDisplaySize(80, 80)
+        .setOrigin(0.5, 0.5)
+        .setScrollFactor(0).setDepth(DEPTH.HUD);
+    }
     if (!this.rocketTimerText) {
       this.rocketTimerText = this.scene.add
-        .text(CX, ROCKET_TEXT_Y, '', {
-          fontSize: '52px', fontStyle: 'bold',
+        .text(CX - 26, ROCKET_TEXT_Y + 12, '', {
+          fontSize: '48px', fontStyle: 'bold',
           color: '#FFD700', stroke: '#7A3800', strokeThickness: 7,
         })
-        .setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.HUD);
+        .setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.HUD);
     }
     this.updateRocketTimer(seconds);
     this.rocketTimerBg.setVisible(true);
+    this.rocketTimerIcon.setVisible(true);
     this.rocketTimerText.setVisible(true);
   }
 
   updateRocketTimer(seconds: number): void {
     const s = Math.max(0, seconds);
-    this.rocketTimerText?.setText(`🚀  ${s.toFixed(1)}`);
+    this.rocketTimerText?.setText(`${s.toFixed(1)}`);
 
     const bg = this.rocketTimerBg;
     if (!bg) return;
@@ -129,6 +138,7 @@ export class ScoreHud {
 
   hideRocketTimer(): void {
     this.rocketTimerBg?.setVisible(false);
+    this.rocketTimerIcon?.setVisible(false);
     this.rocketTimerText?.setVisible(false);
   }
 
@@ -139,22 +149,29 @@ export class ScoreHud {
       this.magnetTimerBg = this.scene.add.graphics()
         .setScrollFactor(0).setDepth(DEPTH.HUD);
     }
+    if (!this.magnetTimerIcon) {
+      this.magnetTimerIcon = this.scene.add.image(CX - 72, MAGNET_TEXT_Y + 36, 'item_magnet')
+        .setDisplaySize(80, 80)
+        .setOrigin(0.5, 0.5)
+        .setScrollFactor(0).setDepth(DEPTH.HUD);
+    }
     if (!this.magnetTimerText) {
       this.magnetTimerText = this.scene.add
-        .text(CX, MAGNET_TEXT_Y, '', {
+        .text(CX - 26, MAGNET_TEXT_Y + 12, '', {
           fontSize: '48px', fontStyle: 'bold',
           color: '#88ccff', stroke: '#001144', strokeThickness: 6,
         })
-        .setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.HUD);
+        .setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.HUD);
     }
     this.updateMagnetTimer(seconds);
     this.magnetTimerBg.setVisible(true);
+    this.magnetTimerIcon.setVisible(true);
     this.magnetTimerText.setVisible(true);
   }
 
   updateMagnetTimer(seconds: number): void {
     const s = Math.max(0, seconds);
-    this.magnetTimerText?.setText(`🧲  ${s.toFixed(1)}`);
+    this.magnetTimerText?.setText(`${s.toFixed(1)}`);
 
     const bg = this.magnetTimerBg;
     if (!bg) return;
@@ -172,6 +189,7 @@ export class ScoreHud {
 
   hideMagnetTimer(): void {
     this.magnetTimerBg?.setVisible(false);
+    this.magnetTimerIcon?.setVisible(false);
     this.magnetTimerText?.setVisible(false);
   }
 
@@ -391,8 +409,10 @@ export class ScoreHud {
     this.scoreText.destroy();
     this.bestText.destroy();
     this.rocketTimerBg?.destroy();
+    this.rocketTimerIcon?.destroy();
     this.rocketTimerText?.destroy();
     this.magnetTimerBg?.destroy();
+    this.magnetTimerIcon?.destroy();
     this.magnetTimerText?.destroy();
     this.freezeTimerBg?.destroy();
     this.freezeTimerIcon?.destroy();

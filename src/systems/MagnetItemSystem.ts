@@ -6,7 +6,7 @@ export class MagnetItemSystem {
   private scene: Phaser.Scene;
 
   private attachedCloud: CloudIsland | null = null;
-  private magnetGraphics: Phaser.GameObjects.Graphics | null = null;
+  private magnetImage: Phaser.GameObjects.Image | null = null;
   private magnetActive: boolean = false;
   private floatTime: number = 0;
 
@@ -41,7 +41,7 @@ export class MagnetItemSystem {
 
   /** 매 프레임 — 구름과 함께 이동 + 부유 애니메이션 */
   update(delta: number, cameraScrollY: number): void {
-    if (!this.magnetActive || !this.magnetGraphics || !this.attachedCloud) return;
+    if (!this.magnetActive || !this.magnetImage || !this.attachedCloud) return;
 
     if (this.attachedCloud.isFalling) {
       this.removeMagnet();
@@ -51,7 +51,7 @@ export class MagnetItemSystem {
     this.floatTime += delta / 1000;
     const floatOffset = Math.sin(this.floatTime * Math.PI * 1.3) * 9;
 
-    this.magnetGraphics.setPosition(
+    this.magnetImage.setPosition(
       this.attachedCloud.x,
       this.attachedCloud.topY - ITEM_CONFIG.MAGNET_ITEM_HOVER_Y + floatOffset,
     );
@@ -91,15 +91,16 @@ export class MagnetItemSystem {
     this.magnetActive = true;
     this.floatTime = 0;
 
-    this.magnetGraphics = this.scene.add.graphics().setDepth(DEPTH.ITEM);
-    this.drawMagnetShape(this.magnetGraphics);
+    this.magnetImage = this.scene.add.image(cloud.x, cloud.topY - ITEM_CONFIG.MAGNET_ITEM_HOVER_Y, 'item_magnet')
+      .setDisplaySize(120, 120)
+      .setDepth(DEPTH.ITEM);
   }
 
   private removeMagnet(): void {
     this.magnetActive = false;
     this.attachedCloud = null;
-    this.magnetGraphics?.destroy();
-    this.magnetGraphics = null;
+    this.magnetImage?.destroy();
+    this.magnetImage = null;
   }
 
   private scheduleNext(): void {
@@ -110,71 +111,4 @@ export class MagnetItemSystem {
     this.nextSpawnAt = this.p1CloudCount + interval;
   }
 
-  // ─── 자석 아이콘 드로잉 ───────────────────────────────────
-
-  private drawMagnetShape(g: Phaser.GameObjects.Graphics): void {
-    const outerR  = 22;
-    const armW    = 12;
-    const midR    = outerR - armW / 2;  // 호 스트로크 중심 반지름
-    const poleLen = 19;
-    const oy      = 5;                  // 전체 도형을 살짝 아래로 (시각적 중심 맞춤)
-
-    // ── 외곽 글로우 ─────────────────────────────────────────
-    g.fillStyle(0x00ff88, 0.15);
-    g.fillCircle(0, oy - midR * 0.5, outerR + 15);
-
-    // ── 말굽 호 본체 (∩ 모양, 위쪽이 둥근 U) ─────────────────
-    // arc(cx, cy, r, startAngle, endAngle, anticlockwise=false)
-    // clockwise from π to 0 = 왼쪽→위→오른쪽 = 위쪽 반원 ✓
-    g.lineStyle(armW, 0x00bb55, 1);
-    g.beginPath();
-    g.arc(0, oy, midR, Math.PI, 0, false);
-    g.strokePath();
-
-    // ── 왼쪽 팔 ──────────────────────────────────────────────
-    g.fillStyle(0x00bb55, 1);
-    g.fillRect(-outerR, oy - 1, armW, poleLen + 1);
-
-    // ── 오른쪽 팔 ────────────────────────────────────────────
-    g.fillRect(outerR - armW, oy - 1, armW, poleLen + 1);
-
-    // ── 왼쪽 극 팁 (N — 빨강) ────────────────────────────────
-    g.fillStyle(0xff3344, 1);
-    g.fillRect(-outerR, oy + poleLen - 6, armW, 7);
-
-    // ── 오른쪽 극 팁 (S — 파랑) ─────────────────────────────
-    g.fillStyle(0x2255ee, 1);
-    g.fillRect(outerR - armW, oy + poleLen - 6, armW, 7);
-
-    // ── 호 하이라이트 ────────────────────────────────────────
-    g.lineStyle(2, 0x88ffcc, 0.55);
-    g.beginPath();
-    g.arc(0, oy, midR - 3, Math.PI * 1.12, Math.PI * 0.05, false);
-    g.strokePath();
-
-    // ── 반짝이 포인트 ────────────────────────────────────────
-    g.fillStyle(0xffffff, 0.40);
-    g.fillCircle(-5, oy - midR * 0.65, 3.5);
-
-    // ── N / S 극 레이블 (작은 텍스트 대신 흰 선으로 표현) ────
-    // N: 왼쪽 팁 중앙에 수직선
-    g.lineStyle(2, 0xffffff, 0.7);
-    g.beginPath();
-    g.moveTo(-outerR + armW / 2 - 3, oy + poleLen - 5);
-    g.lineTo(-outerR + armW / 2 - 3, oy + poleLen + 0);
-    g.moveTo(-outerR + armW / 2 - 3, oy + poleLen - 5);
-    g.lineTo(-outerR + armW / 2 + 3, oy + poleLen + 0);
-    g.moveTo(-outerR + armW / 2 + 3, oy + poleLen - 5);
-    g.lineTo(-outerR + armW / 2 + 3, oy + poleLen + 0);
-    g.strokePath();
-
-    // S: 오른쪽 팁 (작은 S 커브 느낌 — 두 수평선)
-    g.lineStyle(2, 0xffffff, 0.7);
-    g.beginPath();
-    g.moveTo(outerR - armW + 2, oy + poleLen - 5);
-    g.lineTo(outerR - 2, oy + poleLen - 5);
-    g.moveTo(outerR - armW + 2, oy + poleLen);
-    g.lineTo(outerR - 2, oy + poleLen);
-    g.strokePath();
-  }
 }

@@ -8,7 +8,7 @@ export class StarItemSystem {
   private attachedCloud: CloudIsland | null = null;
 
   get attachedCloudId(): string | null { return this.attachedCloud?.id ?? null; }
-  private starGraphics: Phaser.GameObjects.Graphics | null = null;
+  private starImage: Phaser.GameObjects.Image | null = null;
   private starActive: boolean = false;
   private floatTime: number = 0;
 
@@ -32,7 +32,7 @@ export class StarItemSystem {
 
   /** 매 프레임 — 구름과 함께 이동 + 부유 애니메이션 */
   update(delta: number, cameraScrollY: number): void {
-    if (!this.starActive || !this.starGraphics || !this.attachedCloud) return;
+    if (!this.starActive || !this.starImage || !this.attachedCloud) return;
 
     // 낙하 중인 구름이면 별도 제거
     if (this.attachedCloud.isFalling) {
@@ -44,7 +44,7 @@ export class StarItemSystem {
     const floatOffset = Math.sin(this.floatTime * Math.PI * 1.4) * 10;
 
     // 구름의 현재 월드 좌표를 매 프레임 추적
-    this.starGraphics.setPosition(
+    this.starImage.setPosition(
       this.attachedCloud.x,
       this.attachedCloud.topY - ITEM_CONFIG.STAR_HOVER_Y + floatOffset,
     );
@@ -83,47 +83,15 @@ export class StarItemSystem {
     this.starActive = true;
     this.floatTime = 0;
 
-    this.starGraphics = this.scene.add.graphics().setDepth(DEPTH.ITEM);
-    this.drawStarShape(this.starGraphics);
-    // 초기 위치는 첫 update()에서 설정됨
+    this.starImage = this.scene.add.image(cloud.x, cloud.topY - ITEM_CONFIG.STAR_HOVER_Y, 'item_rocket')
+      .setDisplaySize(120, 120)
+      .setDepth(DEPTH.ITEM);
   }
 
   private removeStar(): void {
     this.starActive = false;
     this.attachedCloud = null;
-    this.starGraphics?.destroy();
-    this.starGraphics = null;
-  }
-
-  private drawStarShape(g: Phaser.GameObjects.Graphics): void {
-    const outerR = ITEM_CONFIG.STAR_OUTER_RADIUS;
-    const innerR = ITEM_CONFIG.STAR_INNER_RADIUS;
-    const pts = this.buildStarPoints(outerR, innerR);
-
-    // 바깥 글로우
-    g.fillStyle(0xFFEE44, 0.20);
-    g.fillCircle(0, 0, outerR + 20);
-
-    // 별 본체
-    g.fillStyle(0xFFD700, 1);
-    g.fillPoints(pts, true);
-
-    // 외곽선
-    g.lineStyle(3, 0xFFF59D, 0.95);
-    g.strokePoints(pts, true);
-
-    // 하이라이트
-    g.fillStyle(0xFFFFFF, 0.55);
-    g.fillEllipse(-outerR * 0.18, -outerR * 0.22, outerR * 0.46, outerR * 0.28);
-  }
-
-  private buildStarPoints(outerR: number, innerR: number): Phaser.Types.Math.Vector2Like[] {
-    const pts: Phaser.Types.Math.Vector2Like[] = [];
-    for (let i = 0; i < 10; i++) {
-      const angle = (i * Math.PI) / 5 - Math.PI / 2;
-      const r = i % 2 === 0 ? outerR : innerR;
-      pts.push({ x: Math.cos(angle) * r, y: Math.sin(angle) * r });
-    }
-    return pts;
+    this.starImage?.destroy();
+    this.starImage = null;
   }
 }
