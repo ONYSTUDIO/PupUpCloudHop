@@ -12,9 +12,11 @@ export class PreloadScene extends Phaser.Scene {
     this.showLoadingBar();
     this.load.image('bg_1', 'assets/images/backgrounds/bg_1.png');
     this.load.image('bg_2', 'assets/images/backgrounds/bg_2.png');
-    this.load.image('bg_ig_sky',   'assets/images/backgrounds/bg_ig_sky.png');
-    this.load.image('bg_ig_cloud', 'assets/images/backgrounds/bg_ig_cloud.png');
-    this.load.image('bg_ig_town',  'assets/images/backgrounds/bg_ig_town.png');
+    this.load.image('bg_ig_sky',     'assets/images/backgrounds/bg_ig_sky.png');
+    this.load.image('bg_ig_cloud',   'assets/images/backgrounds/bg_ig_cloud.png');
+    this.load.image('bg_ig_town',    'assets/images/backgrounds/bg_ig_town.png');
+    this.load.image('bg_login_town', 'assets/images/backgrounds/bg_login_town.png');
+    this.load.image('bg_main_town',  'assets/images/backgrounds/bg_main_town.png');
 
     this.load.image('corgi_left',       'assets/images/characters/corgi_left.png');
     this.load.image('corgi_right',      'assets/images/characters/corgi_right.png');

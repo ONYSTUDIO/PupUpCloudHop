@@ -29,28 +29,9 @@ export class TitleScene extends Phaser.Scene {
   // ─── 배경 ────────────────────────────────────────────────
 
   private drawBackground(): void {
-    const g = this.add.graphics().setDepth(DEPTH.BACKGROUND);
-    g.fillGradientStyle(0x87ceeb, 0x87ceeb, 0x2277cc, 0x2277cc, 1);
-    g.fillRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
-
-    const decorClouds = [
-      { x: 180,  y: 280,  w: 320, h: 80 },
-      { x: 880,  y: 480,  w: 260, h: 65 },
-      { x: 120,  y: 720,  w: 280, h: 72 },
-      { x: 820,  y: 950,  w: 300, h: 75 },
-      { x: 300,  y: 1200, w: 240, h: 60 },
-      { x: 750,  y: 1420, w: 280, h: 70 },
-      { x: 200,  y: 1650, w: 220, h: 55 },
-      { x: 870,  y: 1820, w: 260, h: 65 },
-    ];
-    decorClouds.forEach((c) => this.drawDecorCloud(g, c.x, c.y, c.w, c.h));
-  }
-
-  private drawDecorCloud(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number): void {
-    g.fillStyle(0xffffff, 0.22);
-    g.fillEllipse(x, y, w, h);
-    g.fillEllipse(x - w * 0.22, y - h * 0.25, w * 0.42, h * 0.65);
-    g.fillEllipse(x + w * 0.12, y - h * 0.35, w * 0.36, h * 0.56);
+    this.add.image(BASE_WIDTH / 2, BASE_HEIGHT / 2, 'bg_login_town')
+      .setDisplaySize(BASE_WIDTH, BASE_HEIGHT)
+      .setDepth(DEPTH.BACKGROUND);
   }
 
   // ─── 타이틀 ───────────────────────────────────────────────
