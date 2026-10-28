@@ -29,6 +29,9 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image('type_D',  'assets/images/platforms/type_D.png');
     this.load.image('ballon',  'assets/images/platforms/ballon.png');
 
+    this.load.image('bird_flock_01', 'assets/images/hazard/bird_flock/bird_flock_01.png');
+    this.load.image('bird_flock_02', 'assets/images/hazard/bird_flock/bird_flock_02.png');
+
     this.load.image('item_rocket',      'assets/images/items/item_rocket.png');
     this.load.image('item_magnet',      'assets/images/items/item_magnet.png');
     this.load.image('item_freeze',      'assets/images/items/item_freeze.png');

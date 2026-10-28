@@ -2,23 +2,18 @@ import Phaser from 'phaser';
 import { ObstacleType } from '@game-types/game';
 import { DEPTH, OBSTACLE_CONFIG } from '@config/constants';
 
-const BIRD_OFFSETS: ReadonlyArray<{ readonly dx: number; readonly dy: number }> = [
-  { dx:    0, dy: -40 },
-  { dx:  -38, dy: -22 },
-  { dx:   38, dy: -22 },
-  { dx:  -76, dy:  -6 },
-  { dx:   76, dy:  -6 },
-  { dx: -110, dy:  12 },
-  { dx:  110, dy:  12 },
-  { dx:  -20, dy:   8 },
-  { dx:   55, dy:  28 },
-  { dx:  -90, dy:  35 },
+// 메인 클러스터 기준 오프셋: [dx, dy, size, phaseOffset]
+const FLOCK_LAYERS: ReadonlyArray<[number, number, number, number]> = [
+  [   0,   0, 280, 0.00],  // 중앙 주무리
+  [ 115, -58, 250, 0.04],  // 앞쪽 오른쪽 위
+  [ -95,  55, 240, 0.08],  // 뒤쪽 왼쪽 아래
+  [-180, -95, 230, 0.06],  // 왼쪽 위 (대각선 보완)
 ];
 
 export class BirdFlock {
   readonly obstacleType = ObstacleType.BIRD_FLOCK;
 
-  private graphics: Phaser.GameObjects.Graphics;
+  private images: Phaser.GameObjects.Image[];
   private _x: number;
   private _y: number;
   private readonly speed: number;
@@ -31,12 +26,13 @@ export class BirdFlock {
     this._x = x;
     this._y = y;
     this.speed = speed;
-    this._time = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    this._time = Phaser.Math.FloatBetween(0, OBSTACLE_CONFIG.BIRD_FLOCK_FRAME_INTERVAL * 2);
 
-    this.graphics = scene.add.graphics();
-    this.graphics.setDepth(DEPTH.OBSTACLE);
-    this.graphics.setPosition(this._x, this._y);
-    this.draw();
+    this.images = FLOCK_LAYERS.map(([dx, dy, size]) =>
+      scene.add.image(x + dx, y + dy, 'bird_flock_01')
+        .setDisplaySize(size, size)
+        .setDepth(DEPTH.OBSTACLE),
+    );
   }
 
   get x(): number { return this._x; }
@@ -45,8 +41,13 @@ export class BirdFlock {
   update(delta: number): void {
     this._x += this.speed * (delta / 1000);
     this._time += delta / 1000;
-    this.graphics.setPosition(this._x, this._y);
-    this.draw();
+
+    const interval = OBSTACLE_CONFIG.BIRD_FLOCK_FRAME_INTERVAL;
+    FLOCK_LAYERS.forEach(([dx, dy, , phase], i) => {
+      this.images[i]!.setPosition(this._x + dx, this._y + dy);
+      const frame = Math.floor((this._time + phase) / interval) % 2;
+      this.images[i]!.setTexture(frame === 0 ? 'bird_flock_01' : 'bird_flock_02');
+    });
   }
 
   get isOffScreen(): boolean {
@@ -54,25 +55,6 @@ export class BirdFlock {
   }
 
   destroy(): void {
-    this.graphics.destroy();
-  }
-
-  private draw(): void {
-    const g = this.graphics;
-    g.clear();
-
-    g.lineStyle(4, 0x222244, 0.92);
-
-    BIRD_OFFSETS.forEach(({ dx, dy }, i) => {
-      const phase = this._time * 5.5 + i * 0.55;
-      const wingDip = 4 + Math.sin(phase) * 5;
-      const bw = 10;
-
-      g.beginPath();
-      g.moveTo(dx - bw, dy + wingDip);
-      g.lineTo(dx,      dy);
-      g.lineTo(dx + bw, dy + wingDip);
-      g.strokePath();
-    });
+    this.images.forEach((img) => img.destroy());
   }
 }
