@@ -48,10 +48,12 @@ export class ScoreHud {
 
   // 구름 동결 타이머
   private freezeTimerBg: Phaser.GameObjects.Graphics | null = null;
+  private freezeTimerIcon: Phaser.GameObjects.Image | null = null;
   private freezeTimerText: Phaser.GameObjects.Text | null = null;
 
   // 타임슬로우 타이머
   private slowTimerBg: Phaser.GameObjects.Graphics | null = null;
+  private slowTimerIcon: Phaser.GameObjects.Image | null = null;
   private slowTimerText: Phaser.GameObjects.Text | null = null;
 
   // 마일스톤 코인 주머니 (점수 오른쪽에 나열)
@@ -171,22 +173,29 @@ export class ScoreHud {
       this.freezeTimerBg = this.scene.add.graphics()
         .setScrollFactor(0).setDepth(DEPTH.HUD);
     }
+    if (!this.freezeTimerIcon) {
+      this.freezeTimerIcon = this.scene.add.image(CX - 68, FREEZE_TEXT_Y + 26, 'item_freeze')
+        .setDisplaySize(52, 52)
+        .setOrigin(0.5, 0.5)
+        .setScrollFactor(0).setDepth(DEPTH.HUD);
+    }
     if (!this.freezeTimerText) {
       this.freezeTimerText = this.scene.add
-        .text(CX, FREEZE_TEXT_Y, '', {
+        .text(CX - 36, FREEZE_TEXT_Y, '', {
           fontSize: '48px', fontStyle: 'bold',
           color: '#aaddff', stroke: '#002244', strokeThickness: 6,
         })
-        .setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.HUD);
+        .setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.HUD);
     }
     this.updateFreezeTimer(seconds);
     this.freezeTimerBg.setVisible(true);
+    this.freezeTimerIcon.setVisible(true);
     this.freezeTimerText.setVisible(true);
   }
 
   updateFreezeTimer(seconds: number): void {
     const s = Math.max(0, seconds);
-    this.freezeTimerText?.setText(`🧊  ${s.toFixed(1)}`);
+    this.freezeTimerText?.setText(`${s.toFixed(1)}`);
 
     const bg = this.freezeTimerBg;
     if (!bg) return;
@@ -204,6 +213,7 @@ export class ScoreHud {
 
   hideFreezeTimer(): void {
     this.freezeTimerBg?.setVisible(false);
+    this.freezeTimerIcon?.setVisible(false);
     this.freezeTimerText?.setVisible(false);
   }
 
@@ -214,22 +224,29 @@ export class ScoreHud {
       this.slowTimerBg = this.scene.add.graphics()
         .setScrollFactor(0).setDepth(DEPTH.HUD);
     }
+    if (!this.slowTimerIcon) {
+      this.slowTimerIcon = this.scene.add.image(CX - 68, SLOW_TEXT_Y + 26, 'item_time_slow')
+        .setDisplaySize(52, 52)
+        .setOrigin(0.5, 0.5)
+        .setScrollFactor(0).setDepth(DEPTH.HUD);
+    }
     if (!this.slowTimerText) {
       this.slowTimerText = this.scene.add
-        .text(CX, SLOW_TEXT_Y, '', {
+        .text(CX - 36, SLOW_TEXT_Y, '', {
           fontSize: '48px', fontStyle: 'bold',
           color: '#dd99ff', stroke: '#220033', strokeThickness: 6,
         })
-        .setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.HUD);
+        .setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.HUD);
     }
     this.updateSlowTimer(seconds);
     this.slowTimerBg.setVisible(true);
+    this.slowTimerIcon.setVisible(true);
     this.slowTimerText.setVisible(true);
   }
 
   updateSlowTimer(seconds: number): void {
     const s = Math.max(0, seconds);
-    this.slowTimerText?.setText(`⏱  ${s.toFixed(1)}`);
+    this.slowTimerText?.setText(`${s.toFixed(1)}`);
 
     const bg = this.slowTimerBg;
     if (!bg) return;
@@ -247,6 +264,7 @@ export class ScoreHud {
 
   hideSlowTimer(): void {
     this.slowTimerBg?.setVisible(false);
+    this.slowTimerIcon?.setVisible(false);
     this.slowTimerText?.setVisible(false);
   }
 
@@ -317,8 +335,10 @@ export class ScoreHud {
     this.magnetTimerBg?.destroy();
     this.magnetTimerText?.destroy();
     this.freezeTimerBg?.destroy();
+    this.freezeTimerIcon?.destroy();
     this.freezeTimerText?.destroy();
     this.slowTimerBg?.destroy();
+    this.slowTimerIcon?.destroy();
     this.slowTimerText?.destroy();
     this.bagIcons.forEach((b) => b.destroy());
     this.bagIcons = [];
