@@ -1,5 +1,29 @@
 {
   "worktree": {
     "bgIsolation": "none"
+  },
+  "permissions": {
+    "allow": [
+      "Edit(docs/**)",
+      "Write(docs/**)",
+      "Edit(src/**)",
+      "Write(src/**)",
+      "Edit(tests/**)",
+      "Write(tests/**)",
+      "Write(scripts/sim/**)",
+      "Write(supabase/migrations/**)",
+      "Bash(npm run build)",
+      "Bash(npm run lint)",
+      "Bash(npx tsc *)",
+      "Bash(npx playwright test *)",
+      "Bash(node scripts/sim/*)",
+      "Bash(git status)",
+      "Bash(git diff *)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Edit(.env*)",
+      "Bash(supabase *)"
+    ]
   }
 }
