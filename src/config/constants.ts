@@ -262,3 +262,9 @@ export function buildInitialLayout(): CloudIslandConfig[] {
 
   return layout;
 }
+
+/** 배경 레이어 블러 postFX. 모바일 GPU 에서 전체화면 postFX 가 점프 시점(스크롤 시작)에 화면을 멈추게 해 터치 기기에서는 끈다. */
+export const BG_BLUR = {
+  strength: 2,
+  mobileEnabled: false,
+} as const;

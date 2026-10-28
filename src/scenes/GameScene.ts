@@ -31,7 +31,7 @@ import { DirectionWheel } from '@ui/DirectionWheel';
 import { ActionPanel } from '@ui/ActionPanel';
 import { MetaIconPanel } from '@ui/MetaIconPanel';
 import { JumpPatternType } from '@game-types/game';
-import { SCENE_KEYS, DEPTH, EVENTS, buildInitialLayout, ITEM_CONFIG } from '@config/constants';
+import { SCENE_KEYS, DEPTH, EVENTS, buildInitialLayout, ITEM_CONFIG, BG_BLUR } from '@config/constants';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 import { GAMEPLAY } from '@config/gameplayConfig';
 import { UI_LAYOUT } from '@config/uiLayout';
@@ -468,7 +468,7 @@ export class GameScene extends Phaser.Scene {
         .setScrollFactor(0)
         .setDepth(1.5)
         .setTileScale(BASE_WIDTH / 821, BASE_HEIGHT / 1916);
-      this.bgSkyTile.postFX?.addBlur(0, 2, 2);
+      if (this.useBgBlur()) this.bgSkyTile.postFX?.addBlur(0, BG_BLUR.strength, BG_BLUR.strength);
     }
 
     // Layer 2 — bg_ig_cloud: 중간 레이어, 중간 속도 무한 타일 스크롤
@@ -478,7 +478,7 @@ export class GameScene extends Phaser.Scene {
         .setScrollFactor(0)
         .setDepth(1.6)
         .setTileScale(BASE_WIDTH / 821, BASE_HEIGHT / 1916);
-      this.bgCloudTile.postFX?.addBlur(0, 2, 2);
+      if (this.useBgBlur()) this.bgCloudTile.postFX?.addBlur(0, BG_BLUR.strength, BG_BLUR.strength);
     }
 
     // Layer 3 — bg_ig_town: 최상단, 시작 화면 1회만 표시 (월드 좌표)
@@ -490,7 +490,7 @@ export class GameScene extends Phaser.Scene {
       const src = bgTown.texture.getSourceImage() as HTMLImageElement;
       const townH = BASE_WIDTH * (src.height / src.width);
       bgTown.setDisplaySize(BASE_WIDTH, townH);
-      bgTown.postFX?.addBlur(0, 2, 2);
+      if (this.useBgBlur()) bgTown.postFX?.addBlur(0, BG_BLUR.strength, BG_BLUR.strength);
     }
 
     // 하단 안개 오버레이 — bg_ig_sky 하단을 흰 뿌연 효과로 자연스럽게 연결
@@ -1259,6 +1259,10 @@ export class GameScene extends Phaser.Scene {
     const arrowAlpha = (isBoost || isSlow) ? 0.95 : 0.85;
     this.directionArrow.fillStyle(arrowColor, arrowAlpha);
     this.directionArrow.fillTriangle(ex, ey, lx, ly, rx, ry);
+  }
+
+  private useBgBlur(): boolean {
+    return BG_BLUR.mobileEnabled || this.sys.game.device.os.desktop;
   }
 
   // ─── JUMP 버튼 상태 갱신 ───────────────────────────────
