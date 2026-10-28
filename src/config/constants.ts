@@ -108,7 +108,7 @@ export const SPAWN_CONFIG = {
 // 장애물 설정
 export const OBSTACLE_CONFIG = {
   // 착지 횟수 기반 해금 임계값 (점수 기반에서 변경)
-  BIRD_UNLOCK_LANDINGS:  25,  // 이전: 점수 10점
+  BIRD_UNLOCK_LANDINGS:  25,
   STORM_UNLOCK_LANDINGS: 50,  // 이전: 점수 30점
   // 해금 직후 첫 스폰까지 유예 시간 (이 시간 동안 경고 표시)
   BIRD_UNLOCK_DELAY_MS: 3000,

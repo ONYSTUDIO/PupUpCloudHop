@@ -6,7 +6,7 @@ import { DEPTH, OBSTACLE_CONFIG } from '@config/constants';
 const FLOCK_LAYERS: ReadonlyArray<[number, number, number, number]> = [
   [   0,   0, 280, 0.00],  // 중앙 주무리
   [ 115, -58, 250, 0.04],  // 앞쪽 오른쪽 위
-  [ -95,  55, 240, 0.08],  // 뒤쪽 왼쪽 아래
+  [-130,  60, 240, 0.08],  // 뒤쪽 왼쪽 아래
   [-180, -95, 230, 0.06],  // 왼쪽 위 (대각선 보완)
 ];
 
