@@ -15,6 +15,8 @@ import { IceItemSystem } from '@systems/IceItemSystem';
 import { CloudFreezeSystem } from '@systems/CloudFreezeSystem';
 import { TimeSlowItemSystem } from '@systems/TimeSlowItemSystem';
 import { TimeSlowSystem } from '@systems/TimeSlowSystem';
+import { TimeBoostItemSystem } from '@systems/TimeBoostItemSystem';
+import { TimeBoostSystem } from '@systems/TimeBoostSystem';
 import { AudioManager } from '@managers/AudioManager';
 import { HapticsManager } from '@managers/HapticsManager';
 import { InputManager } from '@managers/InputManager';
@@ -62,6 +64,8 @@ export class GameScene extends Phaser.Scene {
   private cloudFreezeSystem!: CloudFreezeSystem;
   private timeSlowItemSystem!: TimeSlowItemSystem;
   private timeSlowSystem!: TimeSlowSystem;
+  private timeBoostItemSystem!: TimeBoostItemSystem;
+  private timeBoostSystem!: TimeBoostSystem;
 
   // 매니저 / UI
   private audioManager!: AudioManager;
@@ -220,6 +224,8 @@ export class GameScene extends Phaser.Scene {
     this.cloudFreezeSystem = new CloudFreezeSystem(this);
     this.timeSlowItemSystem = new TimeSlowItemSystem(this);
     this.timeSlowSystem = new TimeSlowSystem(this);
+    this.timeBoostItemSystem = new TimeBoostItemSystem(this);
+    this.timeBoostSystem = new TimeBoostSystem(this);
     this.topHud = new TopHud(
       this,
       this.saveManager.getCoins(),
@@ -304,12 +310,14 @@ export class GameScene extends Phaser.Scene {
     const dt = delta / 1000;
     const scrollY = this.cameras.main.scrollY;
 
-    // 타임슬로우 활성 시 방향 휠 진자만 감속 (구름·장애물·플레이어는 실제 속도 유지)
-    const wheelDelta = this.timeSlowSystem?.isActive
-      ? delta * ITEM_CONFIG.TIME_SLOW_FACTOR
-      : delta;
+    // 마지막 획득 아이템 우선: boost > slow > 기본
+    const wheelDelta = this.timeBoostSystem?.isActive
+      ? delta * ITEM_CONFIG.TIME_BOOST_FACTOR
+      : this.timeSlowSystem?.isActive
+        ? delta * ITEM_CONFIG.TIME_SLOW_FACTOR
+        : delta;
 
-    // 1. 구름섬 위치 갱신 + 방향 휠 진자 갱신(슬로우 적용)
+    // 1. 구름섬 위치 갱신 + 방향 휠 진자 갱신(슬로우/부스트 적용)
     this.movementSystem.update(delta);
     this.spawnSystem.updateVortexPositions(delta);
     this.directionWheel.update(wheelDelta);
@@ -319,8 +327,9 @@ export class GameScene extends Phaser.Scene {
     this.magnetItemSystem.update(delta, scrollY);
     this.iceItemSystem.update(delta, scrollY);
     this.timeSlowItemSystem.update(delta, scrollY);
+    this.timeBoostItemSystem.update(delta, scrollY);
     this.shieldSystem.update(delta, this.player.x, this.player.y);
-    // 자석·동결·타임슬로우 타이머는 실제 시간으로 카운트다운
+    // 자석·동결·타임슬로우·타임부스트 타이머는 실제 시간으로 카운트다운
     const wasActive = this.magnetSystem.isActive;
     this.magnetSystem.update(delta, this.player.x, this.player.y, this.clouds);
     if (this.magnetSystem.isActive) {
@@ -342,6 +351,13 @@ export class GameScene extends Phaser.Scene {
       this.scoreHud.updateSlowTimer(this.timeSlowSystem.timer);
     } else if (wasSlowActive) {
       this.scoreHud.hideSlowTimer();
+    }
+    const wasBoostActive = this.timeBoostSystem.isActive;
+    this.timeBoostSystem.update(delta);
+    if (this.timeBoostSystem.isActive) {
+      this.scoreHud.updateBoostTimer(this.timeBoostSystem.timer);
+    } else if (wasBoostActive) {
+      this.scoreHud.hideBoostTimer();
     }
 
     // ── 로켓 모드 분기 ──────────────────────────────────────
@@ -503,7 +519,15 @@ export class GameScene extends Phaser.Scene {
       // → nextSpawnAt=3이면 c3(시작 기준 3번째 위 구름)에 얼음 아이템 등장
       if (i > 0) {
         this.iceItemSystem.onPattern1CloudSpawned(cloud, null, null);
-        this.timeSlowItemSystem.onPattern1CloudSpawned(cloud, null, null, null);
+        this.timeSlowItemSystem.onPattern1CloudSpawned(
+          cloud, null, null,
+          this.iceItemSystem.attachedCloudId,
+        );
+        this.timeBoostItemSystem.onPattern1CloudSpawned(
+          cloud, null, null,
+          this.iceItemSystem.attachedCloudId,
+          this.timeSlowItemSystem.attachedCloudId,
+        );
       }
     }
 
@@ -525,7 +549,7 @@ export class GameScene extends Phaser.Scene {
         this.clouds.push(cloud);
         this.movementSystem.register(cloud);
       }
-      // 패턴1 구름(단독 스폰)만 별·자석·얼음·타임슬로우 후보로 등록
+      // 패턴1 구름(단독 스폰)만 별·자석·얼음·타임슬로우·타임부스트 후보로 등록
       if (batch.length === 1) {
         const cloud = batch[0]!;
         this.starItemSystem.onPattern1CloudSpawned(cloud);
@@ -540,6 +564,13 @@ export class GameScene extends Phaser.Scene {
           this.starItemSystem.attachedCloudId,
           this.magnetItemSystem.attachedCloudId,
           this.iceItemSystem.attachedCloudId,
+        );
+        this.timeBoostItemSystem.onPattern1CloudSpawned(
+          cloud,
+          this.starItemSystem.attachedCloudId,
+          this.magnetItemSystem.attachedCloudId,
+          this.iceItemSystem.attachedCloudId,
+          this.timeSlowItemSystem.attachedCloudId,
         );
       }
     }
@@ -916,7 +947,7 @@ export class GameScene extends Phaser.Scene {
         // 동결 효과 발동 중이면 새로 스폰되는 모든 구름 즉시 동결
         this.cloudFreezeSystem.onCloudSpawned(cloud);
       }
-      // 패턴1 구름(단독 스폰)만 별·자석·얼음·타임슬로우 아이템 후보로 등록
+      // 패턴1 구름(단독 스폰)만 별·자석·얼음·타임슬로우·타임부스트 아이템 후보로 등록
       if (batch.length === 1) {
         const cloud = batch[0]!;
         this.starItemSystem.onPattern1CloudSpawned(cloud);
@@ -932,6 +963,13 @@ export class GameScene extends Phaser.Scene {
           this.magnetItemSystem.attachedCloudId,
           this.iceItemSystem.attachedCloudId,
         );
+        this.timeBoostItemSystem.onPattern1CloudSpawned(
+          cloud,
+          this.starItemSystem.attachedCloudId,
+          this.magnetItemSystem.attachedCloudId,
+          this.iceItemSystem.attachedCloudId,
+          this.timeSlowItemSystem.attachedCloudId,
+        );
       }
       spawnsThisFrame++;
     }
@@ -944,6 +982,7 @@ export class GameScene extends Phaser.Scene {
       this.magnetItemSystem.onCloudRemoved(cloud);
       this.iceItemSystem.onCloudRemoved(cloud);
       this.timeSlowItemSystem.onCloudRemoved(cloud);
+      this.timeBoostItemSystem.onCloudRemoved(cloud);
       this.movementSystem.unregister(cloud);
       cloud.destroy();
     }
@@ -1142,12 +1181,13 @@ export class GameScene extends Phaser.Scene {
 
     const angle = this.directionWheel.angle;
     const length = 280;
-    const isSlow = this.timeSlowSystem?.isActive ?? false;
+    const isSlow  = this.timeSlowSystem?.isActive  ?? false;
+    const isBoost = this.timeBoostSystem?.isActive ?? false;
 
     const ex = this.player.x + Math.cos(angle) * length;
     const ey = this.player.y + Math.sin(angle) * length;
 
-    // 타임슬로우: 보라색 글로우 레이어 (넓은 → 좁은 순서로 겹쳐서 빛나는 느낌)
+    // 타임슬로우: 보라색 글로우 레이어
     if (isSlow) {
       this.directionArrow.lineStyle(14, 0xaa44ff, 0.12);
       this.directionArrow.beginPath();
@@ -1162,21 +1202,40 @@ export class GameScene extends Phaser.Scene {
       this.directionArrow.strokePath();
     }
 
+    // 타임부스트: 주황색 글로우 레이어
+    if (isBoost) {
+      this.directionArrow.lineStyle(14, 0xff8800, 0.12);
+      this.directionArrow.beginPath();
+      this.directionArrow.moveTo(this.player.x, this.player.y);
+      this.directionArrow.lineTo(ex, ey);
+      this.directionArrow.strokePath();
+
+      this.directionArrow.lineStyle(7, 0xffaa33, 0.28);
+      this.directionArrow.beginPath();
+      this.directionArrow.moveTo(this.player.x, this.player.y);
+      this.directionArrow.lineTo(ex, ey);
+      this.directionArrow.strokePath();
+    }
+
     // 점선 효과
     const segments = 8;
-    const lineColor = isSlow ? 0xeeccff : 0xffffff;
-    const lineAlpha = isSlow ? 0.92 : 0.75;
-    const lineWidth = isSlow ? 4 : 3;
+    const lineColor = isBoost ? 0xffcc44 : isSlow ? 0xeeccff : 0xffffff;
+    const lineAlpha = (isBoost || isSlow) ? 0.92 : 0.75;
+    const lineWidth = (isBoost || isSlow) ? 4 : 3;
 
-    // 타임슬로우: 점선 오프셋이 시간에 따라 화살표 방향으로 흘러감
-    const flowOffset = isSlow ? (this.time.now / 600) % (1 / segments) : 0;
+    // 타임슬로우: 점선이 화살표 방향으로 흘러감 / 타임부스트: 반대 방향으로 흘러감
+    const flowOffset = isSlow
+      ? (this.time.now / 600) % (1 / segments)
+      : isBoost
+        ? -(this.time.now / 300) % (1 / segments)
+        : 0;
 
     this.directionArrow.lineStyle(lineWidth, lineColor, lineAlpha);
     for (let i = 0; i < segments; i++) {
       if (i % 2 === 1) continue;
       const t0 = Math.min(i / segments + flowOffset, 1);
       const t1 = Math.min((i + 0.65) / segments + flowOffset, 1);
-      if (t0 >= 1) continue;
+      if (t0 < 0 || t0 >= 1) continue;
       this.directionArrow.beginPath();
       this.directionArrow.moveTo(
         this.player.x + Math.cos(angle) * length * t0,
@@ -1196,7 +1255,9 @@ export class GameScene extends Phaser.Scene {
     const rx = ex + Math.cos(angle - Math.PI * 0.78) * headSize;
     const ry = ey + Math.sin(angle - Math.PI * 0.78) * headSize;
 
-    this.directionArrow.fillStyle(isSlow ? 0xeeccff : 0xffffff, isSlow ? 0.95 : 0.85);
+    const arrowColor = isBoost ? 0xffcc44 : isSlow ? 0xeeccff : 0xffffff;
+    const arrowAlpha = (isBoost || isSlow) ? 0.95 : 0.85;
+    this.directionArrow.fillStyle(arrowColor, arrowAlpha);
     this.directionArrow.fillTriangle(ex, ey, lx, ly, rx, ry);
   }
 
@@ -1320,12 +1381,28 @@ export class GameScene extends Phaser.Scene {
       this.scoreHud.showFreezeTimer(this.cloudFreezeSystem.timer);
     }
 
-    // 타임슬로우 아이템 수집 — 게임 세계 속도 절반으로 감소
+    // 타임슬로우 아이템 수집 — 마지막 획득 우선: 부스트 중이면 부스트 종료
     if (this.timeSlowItemSystem.checkLanding(cloud)) {
       this.saveManager.recordItemPickup();
       profileService.addFragments(1).catch(() => { /* 낙관적 업데이트, 실패 무시 */ });
+      if (this.timeBoostSystem.isActive) {
+        this.timeBoostSystem.deactivate();
+        this.scoreHud.hideBoostTimer();
+      }
       this.timeSlowSystem.activate();
       this.scoreHud.showSlowTimer(this.timeSlowSystem.timer);
+    }
+
+    // 타임부스트 아이템 수집 — 마지막 획득 우선: 슬로우 중이면 슬로우 종료
+    if (this.timeBoostItemSystem.checkLanding(cloud)) {
+      this.saveManager.recordItemPickup();
+      profileService.addFragments(1).catch(() => { /* 낙관적 업데이트, 실패 무시 */ });
+      if (this.timeSlowSystem.isActive) {
+        this.timeSlowSystem.deactivate();
+        this.scoreHud.hideSlowTimer();
+      }
+      this.timeBoostSystem.activate();
+      this.scoreHud.showBoostTimer(this.timeBoostSystem.timer);
     }
 
     // 풍선 충돌 낙하 중 착지 → 게임 계속
@@ -2239,10 +2316,12 @@ export class GameScene extends Phaser.Scene {
     this.magnetItemSystem?.clearAll();
     this.iceItemSystem?.clearAll();
     this.timeSlowItemSystem?.clearAll();
+    this.timeBoostItemSystem?.clearAll();
     this.shieldSystem?.clearAll();
     this.magnetSystem?.clearAll();
     this.cloudFreezeSystem?.clearAll(this.clouds ?? []);
     this.timeSlowSystem?.clearAll();
+    this.timeBoostSystem?.clearAll();
     this.clouds?.forEach((c) => c.destroy());
     this.clouds = [];
     this.player?.destroy();

@@ -66,6 +66,12 @@ export const ITEM_CONFIG = {
   TIME_SLOW_ITEM_SPAWN_MIN: 5,  // 아이템 최소 스폰 간격 (패턴1 구름 기준)
   TIME_SLOW_ITEM_SPAWN_MAX: 10, // 아이템 최대 스폰 간격
   TIME_SLOW_ITEM_HOVER_Y: 86,   // 구름 상단에서 아이템 띄우는 높이 (px)
+  // 인게임 타임부스트 아이템
+  TIME_BOOST_DURATION_SEC: 8,   // 타임부스트 지속 시간 (초) — 슬로우와 동일
+  TIME_BOOST_FACTOR: 2.0,       // 게임 세계 delta 배율 (2.0 = 200% 속도)
+  TIME_BOOST_ITEM_SPAWN_MIN: 6, // 아이템 최소 스폰 간격 (패턴1 구름 기준)
+  TIME_BOOST_ITEM_SPAWN_MAX: 12,// 아이템 최대 스폰 간격
+  TIME_BOOST_ITEM_HOVER_Y: 86,  // 구름 상단에서 아이템 띄우는 높이 (px)
 } as const;
 
 // 동적 구름 스폰 / 디스폰 설정

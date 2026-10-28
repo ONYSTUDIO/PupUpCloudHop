@@ -23,11 +23,15 @@ const MAGNET_BAR_Y  = MAGNET_TEXT_Y + 54;
 
 // 구름 동결 타이머 (자석 타이머 아래)
 const FREEZE_TEXT_Y = MAGNET_BAR_Y + 52;
-const FREEZE_BAR_Y  = FREEZE_TEXT_Y + 54;
+const FREEZE_BAR_Y  = FREEZE_TEXT_Y + 82;
 
 // 타임슬로우 타이머 (구름 동결 타이머 아래)
 const SLOW_TEXT_Y = FREEZE_BAR_Y + 52;
-const SLOW_BAR_Y  = SLOW_TEXT_Y + 54;
+const SLOW_BAR_Y  = SLOW_TEXT_Y + 82;
+
+// 타임부스트 타이머 (타임슬로우 타이머 아래)
+const BOOST_TEXT_Y = SLOW_BAR_Y + 52;
+const BOOST_BAR_Y  = BOOST_TEXT_Y + 82;
 
 const CX = BASE_WIDTH / 2; // 540
 
@@ -55,6 +59,11 @@ export class ScoreHud {
   private slowTimerBg: Phaser.GameObjects.Graphics | null = null;
   private slowTimerIcon: Phaser.GameObjects.Image | null = null;
   private slowTimerText: Phaser.GameObjects.Text | null = null;
+
+  // 타임부스트 타이머
+  private boostTimerBg: Phaser.GameObjects.Graphics | null = null;
+  private boostTimerIcon: Phaser.GameObjects.Image | null = null;
+  private boostTimerText: Phaser.GameObjects.Text | null = null;
 
   // 마일스톤 코인 주머니 (점수 오른쪽에 나열)
   private bagIcons: Phaser.GameObjects.Container[] = [];
@@ -174,14 +183,14 @@ export class ScoreHud {
         .setScrollFactor(0).setDepth(DEPTH.HUD);
     }
     if (!this.freezeTimerIcon) {
-      this.freezeTimerIcon = this.scene.add.image(CX - 68, FREEZE_TEXT_Y + 26, 'item_freeze')
-        .setDisplaySize(52, 52)
+      this.freezeTimerIcon = this.scene.add.image(CX - 72, FREEZE_TEXT_Y + 36, 'item_freeze')
+        .setDisplaySize(80, 80)
         .setOrigin(0.5, 0.5)
         .setScrollFactor(0).setDepth(DEPTH.HUD);
     }
     if (!this.freezeTimerText) {
       this.freezeTimerText = this.scene.add
-        .text(CX - 36, FREEZE_TEXT_Y, '', {
+        .text(CX - 26, FREEZE_TEXT_Y + 12, '', {
           fontSize: '48px', fontStyle: 'bold',
           color: '#aaddff', stroke: '#002244', strokeThickness: 6,
         })
@@ -225,14 +234,14 @@ export class ScoreHud {
         .setScrollFactor(0).setDepth(DEPTH.HUD);
     }
     if (!this.slowTimerIcon) {
-      this.slowTimerIcon = this.scene.add.image(CX - 68, SLOW_TEXT_Y + 26, 'item_time_slow')
-        .setDisplaySize(52, 52)
+      this.slowTimerIcon = this.scene.add.image(CX - 72, SLOW_TEXT_Y + 36, 'item_time_slow')
+        .setDisplaySize(80, 80)
         .setOrigin(0.5, 0.5)
         .setScrollFactor(0).setDepth(DEPTH.HUD);
     }
     if (!this.slowTimerText) {
       this.slowTimerText = this.scene.add
-        .text(CX - 36, SLOW_TEXT_Y, '', {
+        .text(CX - 26, SLOW_TEXT_Y + 12, '', {
           fontSize: '48px', fontStyle: 'bold',
           color: '#dd99ff', stroke: '#220033', strokeThickness: 6,
         })
@@ -266,6 +275,57 @@ export class ScoreHud {
     this.slowTimerBg?.setVisible(false);
     this.slowTimerIcon?.setVisible(false);
     this.slowTimerText?.setVisible(false);
+  }
+
+  // ─── 타임부스트 타이머 ──────────────────────────────────────
+
+  showBoostTimer(seconds: number): void {
+    if (!this.boostTimerBg) {
+      this.boostTimerBg = this.scene.add.graphics()
+        .setScrollFactor(0).setDepth(DEPTH.HUD);
+    }
+    if (!this.boostTimerIcon) {
+      this.boostTimerIcon = this.scene.add.image(CX - 72, BOOST_TEXT_Y + 36, 'item_time_boost')
+        .setDisplaySize(80, 80)
+        .setOrigin(0.5, 0.5)
+        .setScrollFactor(0).setDepth(DEPTH.HUD);
+    }
+    if (!this.boostTimerText) {
+      this.boostTimerText = this.scene.add
+        .text(CX - 26, BOOST_TEXT_Y + 12, '', {
+          fontSize: '48px', fontStyle: 'bold',
+          color: '#ffcc44', stroke: '#663300', strokeThickness: 6,
+        })
+        .setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.HUD);
+    }
+    this.updateBoostTimer(seconds);
+    this.boostTimerBg.setVisible(true);
+    this.boostTimerIcon.setVisible(true);
+    this.boostTimerText.setVisible(true);
+  }
+
+  updateBoostTimer(seconds: number): void {
+    const s = Math.max(0, seconds);
+    this.boostTimerText?.setText(`${s.toFixed(1)}`);
+
+    const bg = this.boostTimerBg;
+    if (!bg) return;
+    bg.clear();
+    const barW  = 260;
+    const barH  = 12;
+    const ratio = s / ITEM_CONFIG.TIME_BOOST_DURATION_SEC;
+    bg.fillStyle(0x000000, 0.35);
+    bg.fillRoundedRect(CX - barW / 2 - 4, BOOST_BAR_Y - 4, barW + 8, barH + 8, 7);
+    bg.fillStyle(0xff9900, 0.88);
+    bg.fillRoundedRect(CX - barW / 2, BOOST_BAR_Y, barW * ratio, barH, 5);
+    bg.fillStyle(0x555555, 0.4);
+    bg.fillRoundedRect(CX - barW / 2 + barW * ratio, BOOST_BAR_Y, barW * (1 - ratio), barH, 5);
+  }
+
+  hideBoostTimer(): void {
+    this.boostTimerBg?.setVisible(false);
+    this.boostTimerIcon?.setVisible(false);
+    this.boostTimerText?.setVisible(false);
   }
 
   // ─── 마일스톤 코인 주머니 ──────────────────────────────────
@@ -340,6 +400,9 @@ export class ScoreHud {
     this.slowTimerBg?.destroy();
     this.slowTimerIcon?.destroy();
     this.slowTimerText?.destroy();
+    this.boostTimerBg?.destroy();
+    this.boostTimerIcon?.destroy();
+    this.boostTimerText?.destroy();
     this.bagIcons.forEach((b) => b.destroy());
     this.bagIcons = [];
   }
