@@ -41,13 +41,12 @@ export class HapticsManager {
 
   vibrate(type: HapticEventType): void {
     if (!this.enabled) return;
-    if (Capacitor.isNativePlatform()) {
-      // setTimeout(0): defer past the current game-loop frame so the native
-      // WKWebView bridge call doesn't block jump logic on iOS.
+    if (Capacitor.getPlatform() === 'android') {
       setTimeout(() => { void this.vibrateNative(type); }, 0);
     } else if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       this.vibrateWeb(type);
     }
+    // iOS: WKWebView bridge causes game-loop freeze — system tap haptics suffice
   }
 
   setEnabled(enabled: boolean): void {
