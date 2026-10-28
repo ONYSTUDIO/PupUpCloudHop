@@ -18,17 +18,15 @@ interface RewardSlot {
 }
 
 const REWARDS: RewardSlot[] = [
-  { wheelLabel: '🪙\n30',      popupLabel: '🪙 코인 30개',    type: 'coins',     value: 30,  bgColor: 0x1a3a8a, probability: 0.25 },
-  { wheelLabel: '🪙\n60',      popupLabel: '🪙 코인 60개',    type: 'coins',     value: 60,  bgColor: 0x2255bb, probability: 0.18 },
-  { wheelLabel: '🧩\n5',       popupLabel: '🧩 조각 5개',     type: 'fragments', value: 5,   bgColor: 0x1a6644, probability: 0.15 },
-  { wheelLabel: '🪙\n100',     popupLabel: '🪙 코인 100개',   type: 'coins',     value: 100, bgColor: 0x1a4499, probability: 0.13 },
-  { wheelLabel: '🧩\n10',      popupLabel: '🧩 조각 10개',    type: 'fragments', value: 10,  bgColor: 0x1a6644, probability: 0.10 },
-  { wheelLabel: '🪙\n200',     popupLabel: '🪙 코인 200개',   type: 'coins',     value: 200, bgColor: 0xbb8800, probability: 0.08 },
-  { wheelLabel: '🧩\n15',      popupLabel: '🧩 조각 15개',    type: 'fragments', value: 15,  bgColor: 0x1a6644, probability: 0.07 },
-  { wheelLabel: '🎟️\n부활권',  popupLabel: '🎟️ 부활권 1개',  type: 'revival',   value: 1,   bgColor: 0x6622aa, probability: 0.04 },
+  { wheelLabel: '🪙\n30',     popupLabel: '🪙 코인 30개',   type: 'coins',     value: 30,  bgColor: 0x1a3a8a, probability: 0.30 },
+  { wheelLabel: '🪙\n60',     popupLabel: '🪙 코인 60개',   type: 'coins',     value: 60,  bgColor: 0x2255bb, probability: 0.24 },
+  { wheelLabel: '🧩\n14',     popupLabel: '🧩 조각 14개',   type: 'fragments', value: 14,  bgColor: 0x1a6644, probability: 0.20 },
+  { wheelLabel: '🪙\n100',    popupLabel: '🪙 코인 100개',  type: 'coins',     value: 100, bgColor: 0x1a4499, probability: 0.14 },
+  { wheelLabel: '🪙\n150',    popupLabel: '🪙 코인 150개',  type: 'coins',     value: 150, bgColor: 0xbb8800, probability: 0.08 },
+  { wheelLabel: '🎟️\n부활권', popupLabel: '🎟️ 부활권 1개', type: 'revival',   value: 1,   bgColor: 0x6622aa, probability: 0.04 },
 ];
 
-const SLICE = (Math.PI * 2) / 8;
+const SLICE = (Math.PI * 2) / 6;
 const CX = BASE_WIDTH / 2;
 const WHEEL_Y = 660;
 const WHEEL_R = 220;
@@ -110,7 +108,7 @@ export class RouletteScene extends Phaser.Scene {
     const g = this.add.graphics();
 
     // Sector fills
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 6; i++) {
       const sa = -Math.PI / 2 + i * SLICE;
       const ea = sa + SLICE;
       g.fillStyle(REWARDS[i]!.bgColor, 1);
@@ -128,7 +126,7 @@ export class RouletteScene extends Phaser.Scene {
     // White border + dividers
     g.lineStyle(3, 0xffffff, 0.55);
     g.strokeCircle(0, 0, WHEEL_R);
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 6; i++) {
       const a = -Math.PI / 2 + i * SLICE;
       g.beginPath();
       g.moveTo(0, 0);
@@ -144,7 +142,7 @@ export class RouletteScene extends Phaser.Scene {
     this.wheelContainer.add(g);
 
     // Slot labels
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 6; i++) {
       const mid = -Math.PI / 2 + i * SLICE + SLICE / 2;
       const r = WHEEL_R * 0.62;
       const txt = this.add.text(
