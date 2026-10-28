@@ -2,20 +2,18 @@ import Phaser from 'phaser';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/baseDimensions';
 import { DEPTH } from '@config/constants';
 import {
-  LANDING_MISSIONS,
-  SCORE_MISSIONS,
   DAILY_MISSIONS,
   WEEKLY_MISSIONS,
   type MissionDef,
 } from '@config/missions';
 import type { SaveManager } from '@managers/SaveManager';
-import { missionService, type MissionService } from '@services/MissionService';
+import type { MissionService } from '@services/MissionService';
 import { profileService } from '@services/ProfileService';
 import { inventoryService } from '@services/InventoryService';
 
 const CX = BASE_WIDTH / 2;
 const PANEL_W = 760;
-const PANEL_H = 1020;
+const PANEL_H = 1200;
 const PANEL_TOP  = BASE_HEIGHT / 2 - PANEL_H / 2;
 const PANEL_BOT  = PANEL_TOP + PANEL_H;
 
@@ -215,7 +213,7 @@ export class MissionPopup {
     this.reg(resetLabel);
     this.dailyTabObjs.push(resetLabel);
 
-    // 일일 미션 3행
+    // 일일 미션 7행
     DAILY_MISSIONS.forEach((m, i) => {
       let myTrigger: (() => void) | undefined;
       const progress = saveManager.getDailyMissionProgress(m.id);
@@ -251,62 +249,6 @@ export class MissionPopup {
       }
     });
 
-    // 구분선 + 장기 목표 헤더
-    const separatorY = firstRowCY(DAILY_MISSIONS.length) + ROW_H / 2 + 14;
-    const divG = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPUP);
-    divG.lineStyle(1, 0x334466, 0.7);
-    divG.beginPath();
-    divG.moveTo(ROW_LEFT, separatorY);
-    divG.lineTo(ROW_RIGHT, separatorY);
-    divG.strokePath();
-    this.reg(divG);
-    this.dailyTabObjs.push(divG);
-
-    const sectionHeader = scene.add
-      .text(ROW_LEFT + 8, separatorY + 16, '장기 목표', {
-        fontSize: '32px', color: '#8899aa', fontStyle: 'bold',
-      })
-      .setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.POPUP);
-    this.reg(sectionHeader);
-    this.dailyTabObjs.push(sectionHeader);
-
-    // 고정 미션 행 (LANDING_MISSIONS + SCORE_MISSIONS)
-    const permanentMissions: MissionDef[] = [...LANDING_MISSIONS, ...SCORE_MISSIONS];
-    const permanentTopY  = separatorY + 52;
-
-    const claimed = saveManager.getClaimedMissions();
-    permanentMissions.forEach((m, i) => {
-      const progress  = m.condition === 'score'
-        ? saveManager.getBestScore()
-        : saveManager.getBestLandings();
-      const isClaimed = claimed.has(m.id);
-      const rowCY     = permanentTopY + ROW_H / 2 + i * ROW_STEP;
-
-      // 패널 하단 클리핑: 닫기 버튼 위쪽으로만 표시
-      if (rowCY + ROW_H / 2 > PANEL_BOT - 180) return;
-
-      let myTrigger: (() => void) | undefined;
-      const { objs, triggerClaim } = this.buildRow(
-        scene, m, rowCY, progress, isClaimed, this.dailyTabObjs,
-        () => {
-          const reward = saveManager.claimMission(m.id);
-          if (reward > 0) {
-            onCoinsChanged();
-            if (myTrigger) {
-              const idx = this.dailyClaimableRows.indexOf(myTrigger);
-              if (idx >= 0) this.dailyClaimableRows.splice(idx, 1);
-            }
-            this.refreshClaimAllBtn();
-            missionService.claimMission(m).catch((e: unknown) => {
-              console.warn('[MissionService] claim failed', e);
-            });
-          }
-        },
-      );
-      myTrigger = triggerClaim;
-      objs.forEach((o) => { this.reg(o); this.dailyTabObjs.push(o); });
-      if (triggerClaim) this.dailyClaimableRows.push(triggerClaim);
-    });
   }
 
   // ─── 주간 탭 빌드 ────────────────────────────────────────

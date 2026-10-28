@@ -1,6 +1,6 @@
 import type { SaveData } from '@game-types/game';
 import { STORAGE_KEYS } from '@config/constants';
-import { ALL_MISSIONS, DAILY_MISSIONS, WEEKLY_MISSIONS } from '@config/missions';
+import { DAILY_MISSIONS, WEEKLY_MISSIONS } from '@config/missions';
 
 /**
  * 저장소 어댑터 인터페이스 — 추후 Capacitor Preferences로 교체 가능
@@ -45,7 +45,6 @@ const DEFAULT_SAVE: SaveData = {
   shieldItems: 0,
   magnetItems: 0,
   revivalItems: 0,
-  claimedMissions: [],
   lastAttendanceDate: '',
   attendanceStreak: 0,
   attendanceDayClaimed: [false, false, false, false, false, false, false],
@@ -54,14 +53,15 @@ const DEFAULT_SAVE: SaveData = {
   // 일일 미션
   lastDailyReset: '',
   dailyLandingCount: 0,
-  dailyScoreReached: false,
-  dailyItemPickedUp: false,
+  dailyBestScore: 0,
+  dailyItemPickupCount: 0,
   dailyMissionClaimed: [],
   // 주간 미션
   lastWeeklyReset: '',
   weeklyTotalLandings: 0,
   weeklyBestScore: 0,
   weeklyDailyMissionDaysCompleted: 0,
+  weeklyItemPickupCount: 0,
   weeklyMissionClaimed: [],
 };
 
@@ -275,26 +275,6 @@ export class SaveManager {
     return isNewBest;
   }
 
-  // ─── 미션 (permanent) ────────────────────────────────────
-
-  getClaimedMissions(): ReadonlySet<string> {
-    return new Set(this.data.claimedMissions);
-  }
-
-  /** permanent 미션을 수령 처리하고 코인을 지급. 이미 수령했거나 미달성이면 0 반환. */
-  claimMission(id: string): number {
-    if (this.data.claimedMissions.includes(id)) return 0;
-    const mission = ALL_MISSIONS.find((m) => m.id === id && m.period === 'permanent');
-    if (!mission) return 0;
-    const progress = mission.condition === 'score'
-      ? this.data.bestScore
-      : this.data.bestLandings;
-    if (progress < mission.target) return 0;
-    this.data.claimedMissions.push(id);
-    this.addCoins(mission.coinReward);
-    return mission.coinReward;
-  }
-
   // ─── 일일 미션 ────────────────────────────────────────────
 
   /** 특정 일일 미션 ID를 오늘 이미 수령했는지 확인 */
@@ -315,8 +295,8 @@ export class SaveManager {
     const today = this.todayString();
     if (this.data.lastDailyReset === today) return;
     this.data.dailyLandingCount = 0;
-    this.data.dailyScoreReached = false;
-    this.data.dailyItemPickedUp = false;
+    this.data.dailyBestScore = 0;
+    this.data.dailyItemPickupCount = 0;
     this.data.dailyMissionClaimed = [];
     this.data.lastDailyReset = today;
     this.persist();
@@ -332,6 +312,7 @@ export class SaveManager {
     this.data.weeklyTotalLandings = 0;
     this.data.weeklyBestScore = 0;
     this.data.weeklyDailyMissionDaysCompleted = 0;
+    this.data.weeklyItemPickupCount = 0;
     this.data.weeklyMissionClaimed = [];
     this.data.lastWeeklyReset = monday;
     this.persist();
@@ -346,8 +327,8 @@ export class SaveManager {
     const today = this.todayString();
     if (this.data.lastDailyReset !== today) {
       this.data.dailyLandingCount = 0;
-      this.data.dailyScoreReached = false;
-      this.data.dailyItemPickedUp = false;
+      this.data.dailyBestScore = 0;
+      this.data.dailyItemPickupCount = 0;
       this.data.dailyMissionClaimed = [];
       this.data.lastDailyReset = today;
     }
@@ -357,14 +338,14 @@ export class SaveManager {
       this.data.weeklyTotalLandings = 0;
       this.data.weeklyBestScore = 0;
       this.data.weeklyDailyMissionDaysCompleted = 0;
+      this.data.weeklyItemPickupCount = 0;
       this.data.weeklyMissionClaimed = [];
       this.data.lastWeeklyReset = monday;
     }
 
     // 일일 진행도 업데이트
     this.data.dailyLandingCount += landingCount;
-    const scoreTarget = DAILY_MISSIONS.find((m) => m.id === 'daily_score_20')?.target ?? 20;
-    if (score >= scoreTarget) this.data.dailyScoreReached = true;
+    if (score > (this.data.dailyBestScore ?? 0)) this.data.dailyBestScore = score;
 
     // 주간 진행도 업데이트
     this.data.weeklyTotalLandings += landingCount;
@@ -380,7 +361,8 @@ export class SaveManager {
    * dailyItemPickedUp = true, 아이템 조각 1개 자동 획득.
    */
   recordItemPickup(): void {
-    this.data.dailyItemPickedUp = true;
+    this.data.dailyItemPickupCount = (this.data.dailyItemPickupCount ?? 0) + 1;
+    this.data.weeklyItemPickupCount = (this.data.weeklyItemPickupCount ?? 0) + 1;
     this.addFragments(1);
   }
 
@@ -390,12 +372,13 @@ export class SaveManager {
    */
   getDailyMissionProgress(id: string): number {
     switch (id) {
-      case 'daily_land_10':  return this.data.dailyLandingCount ?? 0;
-      case 'daily_score_20': {
-        const t = DAILY_MISSIONS.find((m) => m.id === 'daily_score_20')?.target ?? 20;
-        return (this.data.dailyScoreReached ?? false) ? t : 0;
-      }
-      case 'daily_item_1':   return (this.data.dailyItemPickedUp ?? false) ? 1 : 0;
+      case 'daily_land_5':
+      case 'daily_land_10':
+      case 'daily_land_30':  return this.data.dailyLandingCount ?? 0;
+      case 'daily_score_20':
+      case 'daily_score_40': return this.data.dailyBestScore ?? 0;
+      case 'daily_item_1':
+      case 'daily_item_5':   return this.data.dailyItemPickupCount ?? 0;
       default:               return 0;
     }
   }
@@ -422,7 +405,7 @@ export class SaveManager {
 
     this.data.dailyMissionClaimed = [...(this.data.dailyMissionClaimed ?? []), id];
 
-    // 오늘 일일 미션 3개 전부 완료 시 weeklyDailyMissionDaysCompleted 증가
+    // 오늘 일일 미션 7개 전부 완료 시 weeklyDailyMissionDaysCompleted 증가
     const allDailyIds = DAILY_MISSIONS.map((m) => m.id);
     const allClaimed = allDailyIds.every((mid) => this.data.dailyMissionClaimed.includes(mid));
     if (allClaimed) {
@@ -440,10 +423,12 @@ export class SaveManager {
    */
   getWeeklyMissionProgress(id: string): number {
     switch (id) {
-      case 'weekly_land_50':  return this.data.weeklyTotalLandings ?? 0;
-      case 'weekly_score_40': return this.data.weeklyBestScore ?? 0;
-      case 'weekly_daily_3':  return this.data.weeklyDailyMissionDaysCompleted ?? 0;
-      default:                return 0;
+      case 'weekly_land_50':
+      case 'weekly_land_150':  return this.data.weeklyTotalLandings ?? 0;
+      case 'weekly_score_40':  return this.data.weeklyBestScore ?? 0;
+      case 'weekly_daily_3':   return this.data.weeklyDailyMissionDaysCompleted ?? 0;
+      case 'weekly_item_20':   return this.data.weeklyItemPickupCount ?? 0;
+      default:                 return 0;
     }
   }
 
@@ -565,11 +550,8 @@ export class SaveManager {
 
   // ──────────────────────────────────────────────────────────
 
-  /** [테스트용] permanent 수령 완료 미션을 모두 초기화해 다시 수령 가능 상태로 되돌린다. */
-  resetClaimedMissions(): void {
-    this.data.claimedMissions = [];
-    this.persist();
-  }
+  /** [테스트용] permanent 미션 제거됨 (2026-10-26). no-op 유지. */
+  resetClaimedMissions(): void { /* no-op */ }
 
   /** [테스트용] 일일 미션 상태를 초기화해 다시 리셋되도록 한다. */
   resetDailyMissions(): void {
@@ -621,17 +603,6 @@ export class SaveManager {
    * permanent + 일일 + 주간 모두 확인.
    */
   hasPendingMissions(): boolean {
-    // permanent 미션
-    const claimed = new Set(this.data.claimedMissions);
-    const hasPermanent = ALL_MISSIONS
-      .filter((m) => m.period === 'permanent')
-      .some((m) => {
-        if (claimed.has(m.id)) return false;
-        const progress = m.condition === 'score' ? this.data.bestScore : this.data.bestLandings;
-        return progress >= m.target;
-      });
-    if (hasPermanent) return true;
-
     // 일일 미션
     const dailyClaimed = new Set(this.data.dailyMissionClaimed ?? []);
     const hasDaily = DAILY_MISSIONS.some((m) => {
@@ -652,7 +623,17 @@ export class SaveManager {
     const raw = this.adapter.load(STORAGE_KEYS.SAVE_DATA);
     if (!raw) return { ...DEFAULT_SAVE };
     try {
-      return { ...DEFAULT_SAVE, ...(JSON.parse(raw) as Partial<SaveData>) };
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const merged: SaveData = { ...DEFAULT_SAVE, ...(parsed as Partial<SaveData>) };
+      // v1→v2 마이그레이션: dailyScoreReached (bool) → dailyBestScore (number)
+      if (parsed['dailyScoreReached'] === true && !('dailyBestScore' in parsed)) {
+        merged.dailyBestScore = DAILY_MISSIONS.find((m) => m.id === 'daily_score_20')?.target ?? 20;
+      }
+      // v1→v2 마이그레이션: dailyItemPickedUp (bool) → dailyItemPickupCount (number)
+      if (parsed['dailyItemPickedUp'] === true && !('dailyItemPickupCount' in parsed)) {
+        merged.dailyItemPickupCount = 1;
+      }
+      return merged;
     } catch {
       return { ...DEFAULT_SAVE };
     }
