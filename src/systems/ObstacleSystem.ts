@@ -37,7 +37,8 @@ export class ObstacleSystem {
    */
   constructor(private readonly scene: Phaser.Scene, now: number) {
     this.nextFlockTime = now + OBSTACLE_CONFIG.FIRST_SPAWN_DELAY_MS;
-    this.nextStormTime = now + OBSTACLE_CONFIG.STORM_FIRST_SPAWN_DELAY_MS;
+    this.nextStormTime = now; // TEST: 즉시 스폰
+    this.stormUnlocked = true; // TEST: 해금 조건 스킵
   }
 
   /**
@@ -137,7 +138,7 @@ export class ObstacleSystem {
     // 폭풍 없음 → 스폰 여부 확인
     if (this.storm === null) {
       // 착지 횟수 미달 시 스폰 타이머를 밀어 해금 직후 즉시 스폰 방지
-      if (landings < OBSTACLE_CONFIG.STORM_UNLOCK_LANDINGS) {
+      if (landings < 0) { // TEST: 즉시 스폰 (원복: OBSTACLE_CONFIG.STORM_UNLOCK_LANDINGS)
         this.nextStormTime += delta;
         return null;
       }

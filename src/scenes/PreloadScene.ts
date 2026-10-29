@@ -34,6 +34,17 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image('bird_flock_01', 'assets/images/hazard/bird_flock/bird_flock_01.png');
     this.load.image('bird_flock_02', 'assets/images/hazard/bird_flock/bird_flock_02.png');
 
+    this.load.image('thunder_cloud_01',    'assets/images/hazard/lightning/thunder_cloud_01.png');
+    this.load.image('thunder_cloud_02',    'assets/images/hazard/lightning/thunder_cloud_02.png');
+    this.load.image('lightning_bolt_01',   'assets/images/hazard/lightning/lightning_bolt_01.png');
+    this.load.image('lightning_bolt_02',   'assets/images/hazard/lightning/lightning_bolt_02.png');
+    this.load.image('lightning_bolt_03',   'assets/images/hazard/lightning/lightning_bolt_03.png');
+    this.load.image('lightning_bolt_04',   'assets/images/hazard/lightning/lightning_bolt_04.png');
+    this.load.image('lightning_impact_01', 'assets/images/hazard/lightning/lightning_impact_01.png');
+    this.load.image('lightning_impact_02', 'assets/images/hazard/lightning/lightning_impact_02.png');
+    this.load.image('lightning_impact_03', 'assets/images/hazard/lightning/lightning_impact_03.png');
+    this.load.image('lightning_warning_icon', 'assets/images/hazard/lightning/lightning_warning_icon.png');
+
     this.load.image('item_rocket',      'assets/images/items/item_rocket.png');
     this.load.image('item_magnet',      'assets/images/items/item_magnet.png');
     this.load.image('item_freeze',      'assets/images/items/item_freeze.png');
