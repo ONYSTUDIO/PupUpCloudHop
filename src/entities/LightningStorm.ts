@@ -29,7 +29,7 @@ const CLOUD_FLASH_MS  = 300;
 const BOLT_FRAME_MS   = 70;
 const IMPACT_FRAME_MS = [180, 300, 320] as const; // 3프레임 각 지속 ms
 
-type StormPhase = 'rain' | 'warning' | 'strike' | 'hit' | 'done';
+type StormPhase = 'rain' | 'warning' | 'strike' | 'corgi' | 'hit' | 'done';
 interface RainDrop { x: number; y: number; len: number; speed: number; alpha: number }
 
 export class LightningStorm {
@@ -68,8 +68,12 @@ export class LightningStorm {
   private _didHit     = false;
   private _hitCloudId = '';
 
-  get didHit(): boolean { const v = this._didHit; this._didHit = false; return v; }
+  private _didStrike = false;        // strike→corgi 전환 시 1프레임 true
+
+  get didHit():    boolean { const v = this._didHit;    this._didHit    = false; return v; }
   get hitCloudId(): string { return this._hitCloudId; }
+  get didStrike(): boolean { const v = this._didStrike; this._didStrike = false; return v; }
+  get targetCloudId(): string { return this._targetCloudId; }
 
   constructor(private scene: Phaser.Scene) {
     this.rainGfx  = scene.add.graphics().setDepth(DEPTH_RAIN).setScrollFactor(0);
@@ -95,6 +99,7 @@ export class LightningStorm {
       case 'rain':    this.tickRain(delta);                    break;
       case 'warning': this.tickWarning(delta, cameraScrollY); break;
       case 'strike':  this.tickStrike(delta);                  break;
+      case 'corgi':   this.tickCorgi(delta);                   break;
       case 'hit':     this.tickHit(delta);                     break;
     }
   }
@@ -141,12 +146,27 @@ export class LightningStorm {
     this.updateCloudFlash(delta);
 
     if (this.elapsed >= OBSTACLE_CONFIG.STORM_STRIKE_DURATION_MS) {
-      this._didHit     = true;
-      this._hitCloudId = this._targetCloudId;
       this.boltImg?.destroy(); this.boltImg = null;
       this.spawnImpact();
-      this.elapsed = 0;
-      this.phase   = 'hit';
+      this._didStrike = true; // GameScene → player.playShock() 트리거
+      this.elapsed    = 0;
+      this.phase      = 'corgi';
+    }
+  }
+
+  // 충격 코기 연출 페이즈: impact 이미지 표시 + 먹구름 깜빡임 유지
+  // 이 페이즈가 끝날 때 구름섬이 추락한다 (_didHit)
+  private tickCorgi(delta: number): void {
+    this.elapsed += delta;
+    this.rainGfx.clear(); // 비 오버레이 제거
+    this.updateCloudFlash(delta);
+
+    if (this.elapsed >= OBSTACLE_CONFIG.STORM_CORGI_DURATION_MS) {
+      this._didHit     = true;          // 이제 구름 추락
+      this._hitCloudId = this._targetCloudId;
+      this.impactImg?.destroy(); this.impactImg = null; // impact hide
+      this.elapsed     = 0;
+      this.phase       = 'hit';
     }
   }
 

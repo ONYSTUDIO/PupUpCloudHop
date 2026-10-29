@@ -19,6 +19,7 @@ export class ObstacleSystem {
   private stormUnlocked: boolean = false;
   private _stormIntervalMin: number = OBSTACLE_CONFIG.STORM_SPAWN_INTERVAL_MIN_MS;
   private _stormIntervalMax: number = OBSTACLE_CONFIG.STORM_SPAWN_INTERVAL_MAX_MS;
+  private _pendingStrikeId: string | null = null; // 충격 발생 시 1프레임 유지
 
   // ── 전역 쿨다운 (새떼·번개 동시 등장 방지) ─────────────
   private static readonly GLOBAL_COOLDOWN_MS = 5000;
@@ -37,8 +38,7 @@ export class ObstacleSystem {
    */
   constructor(private readonly scene: Phaser.Scene, now: number) {
     this.nextFlockTime = now + OBSTACLE_CONFIG.FIRST_SPAWN_DELAY_MS;
-    this.nextStormTime = now; // TEST: 즉시 스폰
-    this.stormUnlocked = true; // TEST: 해금 조건 스킵
+    this.nextStormTime = now; // 초기값 — 해금 후 첫 스폰 딜레이는 stormUnlocked 분기에서 설정
   }
 
   /**
@@ -66,6 +66,13 @@ export class ObstacleSystem {
 
   freeze(): void   { this._isFrozen = true; }
   unfreeze(): void { this._isFrozen = false; }
+
+  /** 이번 프레임에 번개가 충돌한 구름 ID (한 번 읽으면 null로 리셋) */
+  get pendingStrikeId(): string | null {
+    const v = this._pendingStrikeId;
+    this._pendingStrikeId = null;
+    return v;
+  }
 
   // ── 새떼 업데이트 ────────────────────────────────────────
 
@@ -138,7 +145,7 @@ export class ObstacleSystem {
     // 폭풍 없음 → 스폰 여부 확인
     if (this.storm === null) {
       // 착지 횟수 미달 시 스폰 타이머를 밀어 해금 직후 즉시 스폰 방지
-      if (landings < 0) { // TEST: 즉시 스폰 (원복: OBSTACLE_CONFIG.STORM_UNLOCK_LANDINGS)
+      if (landings < OBSTACLE_CONFIG.STORM_UNLOCK_LANDINGS) {
         this.nextStormTime += delta;
         return null;
       }
@@ -175,6 +182,10 @@ export class ObstacleSystem {
     }
 
     this.storm.update(delta, cameraScrollY);
+
+    if (this.storm.didStrike) {
+      this._pendingStrikeId = this.storm.targetCloudId;
+    }
 
     const hitId = this.storm.didHit ? this.storm.hitCloudId : null;
 

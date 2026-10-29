@@ -380,6 +380,13 @@ export class GameScene extends Phaser.Scene {
     const stormHitId = this.obstacleSystem.updateStorm(
       delta, this.time.now, scrollY, currentCloud, currentLandings,
     );
+    // 번개가 플레이어 탑승 구름에 적중 → 충격 코기 연출
+    // (다른 구름으로 피한 경우 pendingStrikeId !== currentCloudId → 연출 없음)
+    const strikeId = this.obstacleSystem.pendingStrikeId;
+    if (strikeId !== null && strikeId === this.currentCloudId && this.player.isOnGround) {
+      this.player.playShock();
+    }
+
     if (stormHitId !== null) {
       // 방어막이 활성 상태이고 플레이어가 탑승 중인 구름이 번개에 맞은 경우 → 방어막 소모로 무효화
       const isCurrentCloud = stormHitId === this.currentCloudId && this.player.isOnGround;
@@ -387,6 +394,9 @@ export class GameScene extends Phaser.Scene {
         // 방어막 소모 — 구름 추락 없음
       } else {
         this.clouds.find((c) => c.id === stormHitId)?.startFalling();
+        if (isCurrentCloud) {
+          this.player.playGameOver(); // 충격 연출 종료 직후 게임오버 이미지로 전환
+        }
       }
     }
 
@@ -1439,6 +1449,7 @@ export class GameScene extends Phaser.Scene {
 
     this.player.isDead = true;
     this.player.isOnGround = false;
+    this.player.playGameOver();
     this._parabolicJump = false;
 
     // 충돌 당시 수평 속도 보존 (0.3초 후 낙하 방향에 반영)
