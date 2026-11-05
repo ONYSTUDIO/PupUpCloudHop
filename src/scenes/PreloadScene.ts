@@ -24,9 +24,10 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image('corgi_jump_right', 'assets/images/characters/corgi_jump_right.png');
     this.load.image('corgi_idle_1',     'assets/images/characters/corgi_idle_1.png');
     this.load.image('corgi_idle_2',     'assets/images/characters/corgi_idle_2.png');
-    this.load.image('corgi_shock_01',   'assets/images/characters/corgi_shock_01.png');
-    this.load.image('corgi_shock_02',   'assets/images/characters/corgi_shock_02.png');
-    this.load.image('corgi_gameover',   'assets/images/characters/corgi_gameover.png');
+    this.load.image('corgi_shock_01',    'assets/images/characters/corgi_shock_01.png');
+    this.load.image('corgi_shock_02',    'assets/images/characters/corgi_shock_02.png');
+    this.load.image('corgi_gameover',    'assets/images/characters/corgi_gameover.png');
+    this.load.image('corgi_gameover_fly','assets/images/characters/corgi_gameover_fly.png');
 
     this.load.image('type_A',  'assets/images/platforms/type_A.png');
     this.load.image('type_B',  'assets/images/platforms/type_B.png');

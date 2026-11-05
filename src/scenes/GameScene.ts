@@ -1011,6 +1011,10 @@ export class GameScene extends Phaser.Scene {
     );
     if (hit !== null) {
       hit.cloud.startFalling();
+      // 탑승 중인 구름이 새떼에 직격 → 구름섬 위 게임 종료 이미지로 즉시 전환
+      if (hit.cloud.id === this.currentCloudId && this.player.isOnGround) {
+        this.player.playGameOver();
+      }
     }
   }
 
@@ -1449,7 +1453,7 @@ export class GameScene extends Phaser.Scene {
 
     this.player.isDead = true;
     this.player.isOnGround = false;
-    this.player.playGameOver();
+    this.player.startFlyAnim(); // 풍선 튕김 → fly 이미지 회전 (카메라 줌인 연출과 연계)
     this._parabolicJump = false;
 
     // 충돌 당시 수평 속도 보존 (0.3초 후 낙하 방향에 반영)
@@ -1555,6 +1559,18 @@ export class GameScene extends Phaser.Scene {
     this.hapticsManager.vibrate('GAME_OVER');
     this.events.emit(EVENTS.GAME_OVER);
 
+    // fly-anim(비행 중) → 게임오버 확정: 상태 고정 (이미지·회전은 유지)
+    // gameover / gameover-fly → 이미 설정됨, 유지
+    // 그 외 (구름 낙하 등 직접 트리거): playGameOverFly + 줌인
+    if (this.player.state === 'fly-anim') {
+      this.player.playGameOverFly();
+    } else if (this.player.state !== 'gameover' && this.player.state !== 'gameover-fly') {
+      this.player.playGameOverFly();
+      const cam = this.cameras.main;
+      cam.startFollow(this.player as unknown as Phaser.GameObjects.GameObject, false, 1, 1);
+      cam.zoomTo(GAMEPLAY.DRAMATIC_ZOOM, 300, 'Quad.easeOut');
+    }
+
     this.time.delayedCall(600, () => {
       if (this.scene.isActive(SCENE_KEYS.GAME)) this.finalizeGameOver();
     });
@@ -1578,6 +1594,7 @@ export class GameScene extends Phaser.Scene {
 
     // 플레이어 물리 슬로모션
     this.applyPhysics(dt);
+    this.player.update(delta); // 애니메이션(fly-anim 회전 등)은 real-time delta로 유지
     this.player.sync();
     // 카메라 추적은 startFollow가 preRender에서 자동으로 처리함 (수동 setScroll 불필요)
 
@@ -1607,6 +1624,8 @@ export class GameScene extends Phaser.Scene {
     this.isDangerSlow          = true;
     this.dangerSlowElapsed     = 0;
     this.dramaticTriggeredThisJump = true;
+
+    this.player.startFlyAnim(); // 줌인 시작과 동시에 fly 이미지 + 회전
 
     const cam = this.cameras.main;
     // player 객체의 x/y를 Phaser Camera Follow Target으로 직접 등록.
@@ -1787,6 +1806,8 @@ export class GameScene extends Phaser.Scene {
     this.isDangerSlow                    = true;
     this.isFlyOutDramatic                = true;
     this.dangerSlowElapsed               = 0;
+
+    this.player.startFlyAnim(); // 줌인 시작과 동시에 fly 이미지 + 회전
 
     const cam = this.cameras.main;
     cam.startFollow(this.player as unknown as Phaser.GameObjects.GameObject, false, 1, 1);
