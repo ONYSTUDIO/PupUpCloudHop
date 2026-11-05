@@ -13,7 +13,8 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image('bg_1', 'assets/images/backgrounds/bg_1.png');
     this.load.image('bg_2', 'assets/images/backgrounds/bg_2.png');
     this.load.image('bg_ig_sky',     'assets/images/backgrounds/bg_ig_sky.png');
-    this.load.image('bg_ig_cloud',   'assets/images/backgrounds/bg_ig_cloud.png');
+    this.load.image('bg_ig_cloud_big',   'assets/images/backgrounds/bg_ig_cloud_big.png');
+    this.load.image('bg_ig_cloud_small', 'assets/images/backgrounds/bg_ig_cloud_small.png');
     this.load.image('bg_ig_town',    'assets/images/backgrounds/bg_ig_town.png');
     this.load.image('bg_login_town', 'assets/images/backgrounds/bg_login_town.png');
     this.load.image('bg_main_town',  'assets/images/backgrounds/bg_main_town.png');
@@ -54,6 +55,12 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image('item_freeze',      'assets/images/items/item_freeze.png');
     this.load.image('item_time_slow',   'assets/images/items/item_time_slow.png');
     this.load.image('item_time_boost',  'assets/images/items/item_time_boost.png');
+
+    this.load.image('jump_arrow',           'assets/images/ui/ingame/jump_arrow.png');
+    this.load.image('jump_arrow_magnet',    'assets/images/ui/ingame/jump_arrow_magnet.png');
+    this.load.image('jump_arrow_freeze',    'assets/images/ui/ingame/jump_arrow_freeze.png');
+    this.load.image('jump_arrow_time_slow', 'assets/images/ui/ingame/jump_arrow_time_slow.png');
+    this.load.image('jump_arrow_time_boost','assets/images/ui/ingame/jump_arrow_time_boost.png');
   }
 
   async create(): Promise<void> {

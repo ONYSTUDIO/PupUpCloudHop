@@ -31,7 +31,7 @@ import { DirectionWheel } from '@ui/DirectionWheel';
 import { ActionPanel } from '@ui/ActionPanel';
 import { MetaIconPanel } from '@ui/MetaIconPanel';
 import { JumpPatternType } from '@game-types/game';
-import { SCENE_KEYS, DEPTH, EVENTS, buildInitialLayout, ITEM_CONFIG, UPGRADE_CONFIG } from '@config/constants';
+import { SCENE_KEYS, DEPTH, EVENTS, buildInitialLayout, ITEM_CONFIG, UPGRADE_CONFIG, BG_CLOUD_BIG_SPEED_X, BG_CLOUD_SMALL_SPEED_X } from '@config/constants';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 import { GAMEPLAY } from '@config/gameplayConfig';
 import { UI_LAYOUT } from '@config/uiLayout';
@@ -84,12 +84,13 @@ export class GameScene extends Phaser.Scene {
   // 배경 레이어
   private bgSkyTile: Phaser.GameObjects.TileSprite | null = null;
   private bgCloudTile: Phaser.GameObjects.TileSprite | null = null;
+  private bgCloudMoveTile: Phaser.GameObjects.TileSprite | null = null;
   private bgFogOverlay: Phaser.GameObjects.Graphics | null = null;
 
   // 그래픽
   private chargeIndicator!: Phaser.GameObjects.Graphics;
   private jumpButtonGraphics!: Phaser.GameObjects.Graphics;
-  private directionArrow!: Phaser.GameObjects.Graphics;
+  private directionArrow!: Phaser.GameObjects.Image;
   private rocketTrailGraphics!: Phaser.GameObjects.Graphics;
 
   // 패턴별 버튼 위치 (setupBottomControls에서 결정)
@@ -280,7 +281,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.chargeIndicator = this.add.graphics().setDepth(DEPTH.PLAYER + 1);
-    this.directionArrow = this.add.graphics().setDepth(DEPTH.PLAYER + 1);
+    this.directionArrow = this.add.image(0, 0, 'jump_arrow')
+      .setOrigin(0.5, 0.69)
+      .setDisplaySize(300, 300)
+      .setDepth(DEPTH.PLAYER + 1)
+      .setVisible(false);
     this.rocketTrailGraphics = this.add.graphics().setDepth(DEPTH.PLAYER - 1);
 
     if (DEBUG_SHOW_UI_BOUNDS) this.drawDebugUiBounds();
@@ -300,7 +305,14 @@ export class GameScene extends Phaser.Scene {
       const b = Math.round(Phaser.Math.Linear(255, 60, t));
       this.bgSkyTile.setTint((r << 16) | (g << 8) | b);
     }
-    if (this.bgCloudTile) this.bgCloudTile.tilePositionY = camScrollY * 0.6;
+    if (this.bgCloudTile) {
+      this.bgCloudTile.tilePositionX += BG_CLOUD_BIG_SPEED_X * delta / 1000;
+      this.bgCloudTile.tilePositionY = camScrollY * 0.6;
+    }
+    if (this.bgCloudMoveTile) {
+      this.bgCloudMoveTile.tilePositionX += BG_CLOUD_SMALL_SPEED_X * delta / 1000;
+      this.bgCloudMoveTile.tilePositionY = camScrollY * 0.5;
+    }
     // 안개 오버레이: bg_ig_town이 화면 밖으로 사라지는 만큼 서서히 페이드 아웃
     if (this.bgFogOverlay) {
       const fogAlpha = Phaser.Math.Clamp(1 + camScrollY / BASE_HEIGHT, 0, 1);
@@ -487,9 +499,9 @@ export class GameScene extends Phaser.Scene {
       this.bgSkyTile.postFX?.addBlur(0, 2, 2);
     }
 
-    // Layer 2 — bg_ig_cloud: 중간 레이어, 중간 속도 무한 타일 스크롤
-    if (this.textures.exists('bg_ig_cloud')) {
-      this.bgCloudTile = this.add.tileSprite(0, 0, BASE_WIDTH, BASE_HEIGHT, 'bg_ig_cloud')
+    // Layer 2 — bg_ig_cloud_big: 원거리 큰 구름, 느린 가로 이동
+    if (this.textures.exists('bg_ig_cloud_big')) {
+      this.bgCloudTile = this.add.tileSprite(0, 0, BASE_WIDTH, BASE_HEIGHT, 'bg_ig_cloud_big')
         .setOrigin(0, 0)
         .setScrollFactor(0)
         .setDepth(1.6)
@@ -507,6 +519,16 @@ export class GameScene extends Phaser.Scene {
       const townH = BASE_WIDTH * (src.height / src.width);
       bgTown.setDisplaySize(BASE_WIDTH, townH);
       bgTown.postFX?.addBlur(0, 2, 2);
+    }
+
+    // Layer 3-b — bg_ig_cloud_small: 근거리 작은 구름, 빠른 가로 이동
+    if (this.textures.exists('bg_ig_cloud_small')) {
+      this.bgCloudMoveTile = this.add.tileSprite(0, 0, BASE_WIDTH, BASE_HEIGHT, 'bg_ig_cloud_small')
+        .setOrigin(0, 0)
+        .setScrollFactor(0)
+        .setDepth(1.65)
+        .setTileScale(BASE_WIDTH / 821, BASE_HEIGHT / 1916);
+      this.bgCloudMoveTile.postFX?.addBlur(0, 2, 2);
     }
 
     // 하단 안개 오버레이 — bg_ig_sky 하단을 흰 뿌연 효과로 자연스럽게 연결
@@ -1191,94 +1213,34 @@ export class GameScene extends Phaser.Scene {
 
   /** 플레이어 위치에서 방향 휠 각도 방향으로 화살표 표시 */
   private updateDirectionArrow(): void {
-    this.directionArrow.clear();
-
-    if (!this.player.isOnGround || this.player.isDead || this.isGameOver) return;
-    if (this.jumpPattern !== JumpPatternType.PATTERN_1 &&
-        this.jumpPattern !== JumpPatternType.PATTERN_2 &&
-        this.jumpPattern !== JumpPatternType.PATTERN_3) return;
-    if (!this.showDirectionArrow) return;
-
-    const angle = this.directionWheel.angle;
-    const length = 280;
-    const isSlow  = this.timeSlowSystem?.isActive  ?? false;
-    const isBoost = this.timeBoostSystem?.isActive ?? false;
-
-    const ex = this.player.x + Math.cos(angle) * length;
-    const ey = this.player.y + Math.sin(angle) * length;
-
-    // 타임슬로우: 보라색 글로우 레이어
-    if (isSlow) {
-      this.directionArrow.lineStyle(14, 0xaa44ff, 0.12);
-      this.directionArrow.beginPath();
-      this.directionArrow.moveTo(this.player.x, this.player.y);
-      this.directionArrow.lineTo(ex, ey);
-      this.directionArrow.strokePath();
-
-      this.directionArrow.lineStyle(7, 0xcc77ff, 0.28);
-      this.directionArrow.beginPath();
-      this.directionArrow.moveTo(this.player.x, this.player.y);
-      this.directionArrow.lineTo(ex, ey);
-      this.directionArrow.strokePath();
+    if (!this.player.isOnGround || this.player.isDead || this.isGameOver ||
+        !this.showDirectionArrow ||
+        (this.jumpPattern !== JumpPatternType.PATTERN_1 &&
+         this.jumpPattern !== JumpPatternType.PATTERN_2 &&
+         this.jumpPattern !== JumpPatternType.PATTERN_3)) {
+      this.directionArrow.setVisible(false);
+      return;
     }
 
-    // 타임부스트: 주황색 글로우 레이어
-    if (isBoost) {
-      this.directionArrow.lineStyle(14, 0xff8800, 0.12);
-      this.directionArrow.beginPath();
-      this.directionArrow.moveTo(this.player.x, this.player.y);
-      this.directionArrow.lineTo(ex, ey);
-      this.directionArrow.strokePath();
+    const isMagnet = this.magnetSystem?.isActive   ?? false;
+    const isFreeze = this.cloudFreezeSystem?.isActive ?? false;
+    const isSlow   = this.timeSlowSystem?.isActive  ?? false;
+    const isBoost  = this.timeBoostSystem?.isActive ?? false;
 
-      this.directionArrow.lineStyle(7, 0xffaa33, 0.28);
-      this.directionArrow.beginPath();
-      this.directionArrow.moveTo(this.player.x, this.player.y);
-      this.directionArrow.lineTo(ex, ey);
-      this.directionArrow.strokePath();
+    let textureKey = 'jump_arrow';
+    if (isMagnet)      textureKey = 'jump_arrow_magnet';
+    else if (isFreeze) textureKey = 'jump_arrow_freeze';
+    else if (isSlow)   textureKey = 'jump_arrow_time_slow';
+    else if (isBoost)  textureKey = 'jump_arrow_time_boost';
+
+    if (this.directionArrow.texture.key !== textureKey) {
+      this.directionArrow.setTexture(textureKey);
     }
 
-    // 점선 효과
-    const segments = 8;
-    const lineColor = isBoost ? 0xffcc44 : isSlow ? 0xeeccff : 0xffffff;
-    const lineAlpha = (isBoost || isSlow) ? 0.92 : 0.75;
-    const lineWidth = (isBoost || isSlow) ? 4 : 3;
-
-    // 타임슬로우: 점선이 화살표 방향으로 흘러감 / 타임부스트: 반대 방향으로 흘러감
-    const flowOffset = isSlow
-      ? (this.time.now / 600) % (1 / segments)
-      : isBoost
-        ? -(this.time.now / 300) % (1 / segments)
-        : 0;
-
-    this.directionArrow.lineStyle(lineWidth, lineColor, lineAlpha);
-    for (let i = 0; i < segments; i++) {
-      if (i % 2 === 1) continue;
-      const t0 = Math.min(i / segments + flowOffset, 1);
-      const t1 = Math.min((i + 0.65) / segments + flowOffset, 1);
-      if (t0 < 0 || t0 >= 1) continue;
-      this.directionArrow.beginPath();
-      this.directionArrow.moveTo(
-        this.player.x + Math.cos(angle) * length * t0,
-        this.player.y + Math.sin(angle) * length * t0,
-      );
-      this.directionArrow.lineTo(
-        this.player.x + Math.cos(angle) * length * t1,
-        this.player.y + Math.sin(angle) * length * t1,
-      );
-      this.directionArrow.strokePath();
-    }
-
-    // 화살촉
-    const headSize = 22;
-    const lx = ex + Math.cos(angle + Math.PI * 0.78) * headSize;
-    const ly = ey + Math.sin(angle + Math.PI * 0.78) * headSize;
-    const rx = ex + Math.cos(angle - Math.PI * 0.78) * headSize;
-    const ry = ey + Math.sin(angle - Math.PI * 0.78) * headSize;
-
-    const arrowColor = isBoost ? 0xffcc44 : isSlow ? 0xeeccff : 0xffffff;
-    const arrowAlpha = (isBoost || isSlow) ? 0.95 : 0.85;
-    this.directionArrow.fillStyle(arrowColor, arrowAlpha);
-    this.directionArrow.fillTriangle(ex, ey, lx, ly, rx, ry);
+    this.directionArrow
+      .setPosition(this.player.x, this.player.y - 100)
+      .setRotation(this.directionWheel.angle + Math.PI / 2)
+      .setVisible(true);
   }
 
   // ─── JUMP 버튼 상태 갱신 ───────────────────────────────

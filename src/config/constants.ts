@@ -24,6 +24,9 @@ export const EVENTS = {
   MILESTONE: 'milestone',
 } as const;
 
+export const BG_CLOUD_BIG_SPEED_X   = 12; // px/s — 큰 구름(원거리), 느린 속도
+export const BG_CLOUD_SMALL_SPEED_X = 28; // px/s — 작은 구름(근거리), 빠른 속도
+
 export const DEPTH = {
   BACKGROUND:  0,
   DECOR_CLOUD: 1,
