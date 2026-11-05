@@ -9,6 +9,7 @@ import { MetaIconPanel } from '@ui/MetaIconPanel';
 import { CheatPopup, CheatSettings } from '@ui/CheatPopup';
 import { MissionPopup } from '@ui/MissionPopup';
 import { AttendancePopup } from '@ui/AttendancePopup';
+import { UpgradePopup } from '@ui/UpgradePopup';
 import { JumpPatternType } from '@game-types/game';
 import { UI_LAYOUT } from '@config/uiLayout';
 
@@ -28,6 +29,7 @@ export class MainScene extends Phaser.Scene {
   private cheatPopup: CheatPopup | null = null;
   private missionPopup: MissionPopup | null = null;
   private attendancePopup: AttendancePopup | null = null;
+  private upgradePopup: UpgradePopup | null = null;
   private missionBadge!: Phaser.GameObjects.Graphics;
   private authUnsub: (() => void) | null = null;
 
@@ -374,6 +376,22 @@ export class MainScene extends Phaser.Scene {
     );
   }
 
+  private openUpgradePopup(): void {
+    if (this.upgradePopup) return;
+    this.upgradePopup = new UpgradePopup(
+      this,
+      this.saveManager,
+      () => {
+        this.upgradePopup = null;
+        this.topHud.updateCurrency(
+          this.saveManager.getCoins(),
+          this.saveManager.getDiamonds(),
+        );
+      },
+    );
+    this.upgradePopup.open();
+  }
+
   // ─── 최고기록 ──────────────────────────────────────────────
 
   private addBestScore(): void {
@@ -493,7 +511,7 @@ export class MainScene extends Phaser.Scene {
       .setOrigin(0.5).setDepth(DEPTH.HUD)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
-        this.scene.launch(SCENE_KEYS.SHOP, { from: SCENE_KEYS.MAIN, tab: 'upgrade' });
+        this.openUpgradePopup();
       })
       .on('pointerover', () => upgradeBg.setAlpha(0.8))
       .on('pointerout',  () => upgradeBg.setAlpha(1));
@@ -562,5 +580,7 @@ export class MainScene extends Phaser.Scene {
     this.missionPopup = null;
     this.attendancePopup?.destroy();
     this.attendancePopup = null;
+    this.upgradePopup?.destroy();
+    this.upgradePopup = null;
   }
 }

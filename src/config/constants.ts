@@ -135,6 +135,35 @@ export const OBSTACLE_CONFIG = {
   STORM_HIT_DURATION_MS: 800,
 } as const;
 
+// ─── 영구 업그레이드 설정 (docs/ECONOMY_DESIGN.md) ────────────────────────
+export const UPGRADE_CONFIG = {
+  ROCKET: {
+    MAX_LEVEL: 2,
+    COSTS: [
+      { coins: 1500, fragments: 20 }, // 1단계
+      { coins: 3000, fragments: 40 }, // 2단계
+    ] as ReadonlyArray<{ coins: number; fragments: number }>,
+    UNLOCK_CONDITION: 'none' as const,
+    DURATION_BY_LEVEL: [3, 4, 5] as ReadonlyArray<number>, // index = level
+  },
+  ITEM_RATE: {
+    MAX_LEVEL: 2,
+    COSTS: [
+      { coins: 1500, fragments: 20 }, // 1단계
+      { coins: 3000, fragments: 40 }, // 2단계
+    ] as ReadonlyArray<{ coins: number; fragments: number }>,
+    UNLOCK_CONDITION: 'jumps100' as const,
+    REDUCTION_BY_LEVEL: [0, 0.10, 0.20] as ReadonlyArray<number>, // 스폰 간격 감소율
+  },
+  SHIELD: {
+    MAX_LEVEL: 1,
+    COSTS: [
+      { coins: 5000, fragments: 80 }, // 1단계 (MAX)
+    ] as ReadonlyArray<{ coins: number; fragments: number }>,
+    UNLOCK_CONDITION: 'score60' as const,
+  },
+} as const;
+
 // ─── 초기 구름섬 레이아웃 생성 ─────────────────────────────────────────────
 // 매 게임 시작 시 buildInitialLayout()을 호출해 랜덤 배치를 생성한다.
 // 가로 3등분 룰(LEFT/CENTER/RIGHT), center 연속 방지, 세로 간격 모두 SpawnSystem과 동일 기준 적용.

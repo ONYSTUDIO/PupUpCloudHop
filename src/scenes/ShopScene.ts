@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { SCENE_KEYS } from '@config/constants';
+import { SCENE_KEYS, UPGRADE_CONFIG } from '@config/constants';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 import { SaveManager } from '@managers/SaveManager';
 
@@ -88,12 +88,7 @@ const BOOSTER_ITEMS: ShopItem[] = [
   { id: 'boost_trumpet',  name: '🎺 새떼 퇴치 나팔',  desc: '현재 새떼 소멸 + 스폰 억제',    icon: '🎺',  price: 45, currency: 'coin' },
 ];
 
-const UPGRADE_ITEMS: ShopItem[] = [
-  { id: 'shield_up',   name: '🫧 방어막 강화',       desc: '방어 횟수 +1 (최대 2회)',    icon: '🫧', price: 1000, currency: 'coin' },
-  { id: 'rocket_up',   name: '🚀 로켓 시간 연장',     desc: '로켓 지속 +1초 (3초→4초)',   icon: '🚀', price: 800,  currency: 'coin' },
-  { id: 'star_rate_1', name: '⭐ 별 등장률 증가 Lv1', desc: '별 스폰 주기 단축',          icon: '⭐', price: 600,  currency: 'coin' },
-  { id: 'star_rate_2', name: '⭐ 별 등장률 증가 Lv2', desc: '추가 단축 (Lv1 이후)',        icon: '⭐', price: 1200, currency: 'coin' },
-];
+// UPGRADE_ITEMS 는 renderUpgradeTab()에서 직접 UPGRADE_CONFIG를 참조하므로 삭제
 
 const CURRENCY_ITEMS: ShopItem[] = [
   // 💎 다이아몬드 패키지 (IAP)
@@ -111,11 +106,10 @@ const CURRENCY_ITEMS: ShopItem[] = [
   { id: 'starter', name: '🔥 스타터 팩', desc: '우주복 강아지 + 🪙200 + 광고 제거 (신규 1회)', icon: '🎁', price: '$2.99', currency: 'iap', category: 'misc' },
 ];
 
-const TAB_ITEMS: Record<TabKey, ShopItem[]> = {
+const TAB_ITEMS: Record<Exclude<TabKey, 'upgrade'>, ShopItem[]> = {
   skin:     SKIN_ITEMS,
   passive:  PASSIVE_ITEMS,
   booster:  BOOSTER_ITEMS,
-  upgrade:  UPGRADE_ITEMS,
   currency: CURRENCY_ITEMS,
 };
 
@@ -136,6 +130,7 @@ export class ShopScene extends Phaser.Scene {
 
   private coinText!: Phaser.GameObjects.Text;
   private diamondText!: Phaser.GameObjects.Text;
+  private fragmentsText!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: SCENE_KEYS.SHOP });
@@ -191,6 +186,7 @@ export class ShopScene extends Phaser.Scene {
   private drawCurrencyBadges(): void {
     const badgeH   = 72;
     const badgeW   = 230;
+    const fragBadgeW = 200;
     const gap      = 14;
     const rightPad = 24;
     const midY     = HEADER_H / 2;
@@ -223,6 +219,21 @@ export class ShopScene extends Phaser.Scene {
       fontSize: '40px',
       fontStyle: 'bold',
       color: '#82eeff',
+    }).setOrigin(0, 0.5);
+
+    // ── 조각 뱃지 (다이아 왼쪽) ──
+    const fragX = diaX - gap - fragBadgeW;
+    const fragBg = this.add.graphics();
+    fragBg.fillStyle(0x1a0a2e, 0.95);
+    fragBg.fillRoundedRect(fragX, midY - badgeH / 2, fragBadgeW, badgeH, 36);
+    fragBg.lineStyle(2, C.PURPLE, 0.9);
+    fragBg.strokeRoundedRect(fragX, midY - badgeH / 2, fragBadgeW, badgeH, 36);
+
+    this.add.text(fragX + 16, midY, '🧩', { fontSize: '46px' }).setOrigin(0, 0.5);
+    this.fragmentsText = this.add.text(fragX + 70, midY, this.saveManager.getFragments().toLocaleString(), {
+      fontSize: '40px',
+      fontStyle: 'bold',
+      color: '#ce93d8',
     }).setOrigin(0, 0.5);
   }
 
@@ -320,6 +331,10 @@ export class ShopScene extends Phaser.Scene {
       this.renderCurrencyTab();
       return;
     }
+    if (key === 'upgrade') {
+      this.renderUpgradeTab();
+      return;
+    }
 
     const items = TAB_ITEMS[key];
     const ownedSkins  = this.saveManager.getOwnedSkins();
@@ -342,6 +357,217 @@ export class ShopScene extends Phaser.Scene {
 
       this.makeCard(x, y, item, status, key);
     });
+  }
+
+  // ─── 업그레이드 탭 전용 렌더 ───────────────────────────────────
+
+  private renderUpgradeTab(): void {
+    const upgrades = this.saveManager.getUpgrades();
+    const coins = this.saveManager.getCoins();
+    const frags = this.saveManager.getFragments();
+    const bestScore = this.saveManager.getBestScore();
+    const totalJumps = this.saveManager.getTotalJumps();
+
+    const UPGRADE_CARD_H = 300;
+    const UPGRADE_CARD_W = BASE_WIDTH - CARD_PAD_X * 2;
+    const GAP_Y = 28;
+
+    type UpgradeDef = {
+      type: 'rocket' | 'itemRate' | 'shield';
+      icon: string;
+      name: string;
+      level: number;
+      maxLevel: number;
+      effectDesc: (lv: number) => string;
+      unlockMet: boolean;
+      unlockDesc: string;
+    };
+
+    const defs: UpgradeDef[] = [
+      {
+        type: 'rocket',
+        icon: '⭐',
+        name: '로켓 지속시간',
+        level: upgrades.rocketLevel,
+        maxLevel: UPGRADE_CONFIG.ROCKET.MAX_LEVEL,
+        effectDesc: (lv: number): string => {
+          const cur = UPGRADE_CONFIG.ROCKET.DURATION_BY_LEVEL[lv] ?? 3;
+          const nxt = UPGRADE_CONFIG.ROCKET.DURATION_BY_LEVEL[lv + 1];
+          return nxt !== undefined ? `${cur}초 → ${nxt}초` : `${cur}초 (최대)`;
+        },
+        unlockMet: true,
+        unlockDesc: '',
+      },
+      {
+        type: 'itemRate',
+        icon: '✨',
+        name: '아이템 등장률',
+        level: upgrades.itemRateLevel,
+        maxLevel: UPGRADE_CONFIG.ITEM_RATE.MAX_LEVEL,
+        effectDesc: (lv: number): string => {
+          const nxt = UPGRADE_CONFIG.ITEM_RATE.REDUCTION_BY_LEVEL[lv + 1];
+          return nxt !== undefined ? `픽업 간격 −${Math.round(nxt * 100)}%` : '픽업 간격 −20% (최대)';
+        },
+        unlockMet: totalJumps >= 100,
+        unlockDesc: `점프 100회 필요 (현재 ${totalJumps}회)`,
+      },
+      {
+        type: 'shield',
+        icon: '🫧',
+        name: '시작 방어막',
+        level: upgrades.shieldLevel,
+        maxLevel: UPGRADE_CONFIG.SHIELD.MAX_LEVEL,
+        effectDesc: (_lv: number) => '판 시작 시 방어막 1개',
+        unlockMet: bestScore >= 60,
+        unlockDesc: `최고 점수 60점 필요 (현재 ${bestScore}점)`,
+      },
+    ];
+
+    defs.forEach((def, i) => {
+      const cardX = CARD_PAD_X;
+      const cardY = GAP_Y + i * (UPGRADE_CARD_H + GAP_Y);
+      this.makeUpgradeCard(cardX, cardY, UPGRADE_CARD_W, UPGRADE_CARD_H, def, coins, frags);
+    });
+  }
+
+  private makeUpgradeCard(
+    x: number, y: number, w: number, h: number,
+    def: {
+      type: 'rocket' | 'itemRate' | 'shield';
+      icon: string;
+      name: string;
+      level: number;
+      maxLevel: number;
+      effectDesc: (lv: number) => string;
+      unlockMet: boolean;
+      unlockDesc: string;
+    },
+    coins: number,
+    frags: number,
+  ): void {
+    const isMax = def.level >= def.maxLevel;
+    const bgColor = isMax ? C.CARD_OWNED : C.CARD;
+    const borderColor = isMax ? C.GREEN : C.ACCENT;
+
+    const bg = this.add.graphics();
+    bg.fillStyle(bgColor, 1);
+    bg.fillRoundedRect(x, y, w, h, 20);
+    bg.lineStyle(2, borderColor, 1);
+    bg.strokeRoundedRect(x, y, w, h, 20);
+    this.contentContainer.add(bg);
+
+    // 아이콘
+    this.contentContainer.add(
+      this.add.text(x + 72, y + h / 2 - 40, def.icon, { fontSize: '72px' }).setOrigin(0.5),
+    );
+
+    // 이름
+    this.contentContainer.add(
+      this.add.text(x + 130, y + 40, def.name, {
+        fontSize: '38px', fontStyle: 'bold', color: '#ffffff',
+      }).setOrigin(0, 0.5),
+    );
+
+    // 단계 표시
+    const levelLabel = isMax ? 'MAX' : `Lv.${def.level} / ${def.maxLevel}`;
+    const levelColor = isMax ? '#4caf50' : '#4fc3f7';
+    this.contentContainer.add(
+      this.add.text(x + w - 24, y + 40, levelLabel, {
+        fontSize: '34px', fontStyle: 'bold', color: levelColor,
+      }).setOrigin(1, 0.5),
+    );
+
+    // 효과 설명
+    this.contentContainer.add(
+      this.add.text(x + 130, y + 100, def.effectDesc(def.level), {
+        fontSize: '28px', color: '#aaaacc',
+      }).setOrigin(0, 0.5),
+    );
+
+    // 하단 영역: MAX / 잠금 / 비용+구매버튼
+    const badgeY = y + h - 60;
+
+    if (isMax) {
+      // MAX 완성 뱃지
+      const badgeX = x + w / 2 - 200;
+      const badgeW = 400;
+      const badgeBg = this.add.graphics();
+      badgeBg.fillStyle(C.GREEN, 1);
+      badgeBg.fillRoundedRect(badgeX, badgeY - 28, badgeW, 56, 28);
+      this.contentContainer.add(badgeBg);
+      this.contentContainer.add(
+        this.add.text(x + w / 2, badgeY, '업그레이드 완성', {
+          fontSize: '30px', fontStyle: 'bold', color: '#0d1a0d',
+        }).setOrigin(0.5),
+      );
+      return;
+    }
+
+    if (!def.unlockMet) {
+      // 잠금 표시
+      this.contentContainer.add(
+        this.add.text(x + 130, badgeY, `🔒 ${def.unlockDesc}`, {
+          fontSize: '26px', color: '#888888',
+          wordWrap: { width: w - 150 },
+        }).setOrigin(0, 0.5),
+      );
+      return;
+    }
+
+    // 비용 + 구매 버튼
+    const cost = (def.type === 'rocket'
+      ? UPGRADE_CONFIG.ROCKET.COSTS
+      : def.type === 'itemRate'
+        ? UPGRADE_CONFIG.ITEM_RATE.COSTS
+        : UPGRADE_CONFIG.SHIELD.COSTS
+    )[def.level];
+
+    if (!cost) return;
+
+    const canAfford = coins >= cost.coins && frags >= cost.fragments;
+    const costLabel = `🪙${cost.coins.toLocaleString()} + 🧩${cost.fragments}`;
+
+    this.contentContainer.add(
+      this.add.text(x + 130, badgeY, costLabel, {
+        fontSize: '28px', color: canAfford ? '#ffd700' : '#888888',
+      }).setOrigin(0, 0.5),
+    );
+
+    const btnW = 230;
+    const btnX = x + w - 24 - btnW;
+    const btnFill = canAfford ? C.ACCENT : 0x444466;
+    const btnBg = this.add.graphics();
+    const drawBtn = (alpha: number): void => {
+      btnBg.clear();
+      btnBg.fillStyle(btnFill, alpha);
+      btnBg.fillRoundedRect(btnX, badgeY - 28, btnW, 56, 28);
+    };
+    drawBtn(1);
+    this.contentContainer.add(btnBg);
+
+    this.contentContainer.add(
+      this.add.text(btnX + btnW / 2, badgeY, '구매', {
+        fontSize: '30px', fontStyle: 'bold', color: canAfford ? '#0d0d1a' : '#666688',
+      }).setOrigin(0.5),
+    );
+
+    if (canAfford) {
+      const hit = this.add.rectangle(btnX + btnW / 2, badgeY, btnW, 56, 0, 0)
+        .setInteractive({ useHandCursor: true });
+      this.contentContainer.add(hit);
+
+      hit.on('pointerover',  () => drawBtn(0.7));
+      hit.on('pointerout',   () => drawBtn(1));
+      hit.on('pointerdown',  () => {
+        const ok = this.saveManager.purchaseUpgrade(def.type);
+        if (ok) {
+          this.refreshCurrencyDisplay();
+          this.contentContainer.removeAll(true);
+          this.renderUpgradeTab();
+          this.showToast(`${def.name} 업그레이드 완료!`);
+        }
+      });
+    }
   }
 
   // ─── 재화 탭 전용 렌더 ─────────────────────────────────────────
@@ -628,6 +854,7 @@ export class ShopScene extends Phaser.Scene {
   private refreshCurrencyDisplay(): void {
     this.coinText.setText(this.saveManager.getCoins().toLocaleString());
     this.diamondText.setText(this.saveManager.getDiamonds().toLocaleString());
+    this.fragmentsText.setText(this.saveManager.getFragments().toLocaleString());
   }
 
   // ─── 토스트 알림 ──────────────────────────────────────────────

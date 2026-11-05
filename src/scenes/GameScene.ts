@@ -31,7 +31,7 @@ import { DirectionWheel } from '@ui/DirectionWheel';
 import { ActionPanel } from '@ui/ActionPanel';
 import { MetaIconPanel } from '@ui/MetaIconPanel';
 import { JumpPatternType } from '@game-types/game';
-import { SCENE_KEYS, DEPTH, EVENTS, buildInitialLayout, ITEM_CONFIG } from '@config/constants';
+import { SCENE_KEYS, DEPTH, EVENTS, buildInitialLayout, ITEM_CONFIG, UPGRADE_CONFIG } from '@config/constants';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 import { GAMEPLAY } from '@config/gameplayConfig';
 import { UI_LAYOUT } from '@config/uiLayout';
@@ -215,16 +215,21 @@ export class GameScene extends Phaser.Scene {
     // 초기 diffParams (착지 횟수 기준, DEV startLandings 반영)
     this.currentDiffParams = getDifficultyParams(this.scoreSystem.getLandingCount());
 
+    // 아이템 등장률 업그레이드 multiplier 계산 (1단계: ×0.9, 2단계: ×0.8)
+    const itemRateLevel = this.saveManager.getUpgrades().itemRateLevel;
+    const itemRateReduction = UPGRADE_CONFIG.ITEM_RATE.REDUCTION_BY_LEVEL[itemRateLevel] ?? 0;
+    const itemRateMultiplier = 1 - itemRateReduction;
+
     this.obstacleSystem = new ObstacleSystem(this, this.time.now);
-    this.starItemSystem = new StarItemSystem(this);
-    this.magnetItemSystem = new MagnetItemSystem(this);
+    this.starItemSystem = new StarItemSystem(this, itemRateMultiplier);
+    this.magnetItemSystem = new MagnetItemSystem(this, itemRateMultiplier);
     this.shieldSystem = new ShieldSystem(this);
     this.magnetSystem = new MagnetSystem(this);
-    this.iceItemSystem = new IceItemSystem(this);
+    this.iceItemSystem = new IceItemSystem(this, itemRateMultiplier);
     this.cloudFreezeSystem = new CloudFreezeSystem(this);
-    this.timeSlowItemSystem = new TimeSlowItemSystem(this);
+    this.timeSlowItemSystem = new TimeSlowItemSystem(this, itemRateMultiplier);
     this.timeSlowSystem = new TimeSlowSystem(this);
-    this.timeBoostItemSystem = new TimeBoostItemSystem(this);
+    this.timeBoostItemSystem = new TimeBoostItemSystem(this, itemRateMultiplier);
     this.timeBoostSystem = new TimeBoostSystem(this);
     this.topHud = new TopHud(
       this,
@@ -264,8 +269,9 @@ export class GameScene extends Phaser.Scene {
       this.updateDevDiffDisplay();
     }
 
-    // 치트 설정 적용
-    if (data?.startWithShield) {
+    // 치트 설정 또는 시작 방어막 업그레이드 적용
+    const shieldUpgradeActive = this.saveManager.getUpgrades().shieldLevel >= 1;
+    if (data?.startWithShield || shieldUpgradeActive) {
       this.shieldSystem.activate();
     }
     if (data?.startWithMagnet) {
@@ -1935,7 +1941,8 @@ export class GameScene extends Phaser.Scene {
 
   private startRocketMode(): void {
     this.isRocketMode = true;
-    this.rocketTimer = ITEM_CONFIG.ROCKET_DURATION_SEC;
+    const rocketLevel = this.saveManager.getUpgrades().rocketLevel;
+    this.rocketTimer = UPGRADE_CONFIG.ROCKET.DURATION_BY_LEVEL[rocketLevel] ?? ITEM_CONFIG.ROCKET_DURATION_SEC;
     this.rocketLanding = false;
     this.rocketLandTarget = null;
     this.rocketLandTimeout = 0;

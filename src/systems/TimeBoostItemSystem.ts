@@ -4,6 +4,7 @@ import { DEPTH, ITEM_CONFIG } from '@config/constants';
 
 export class TimeBoostItemSystem {
   private scene: Phaser.Scene;
+  private itemRateMultiplier: number;
 
   private attachedCloud: CloudIsland | null = null;
   private itemImage: Phaser.GameObjects.Image | null = null;
@@ -13,9 +14,10 @@ export class TimeBoostItemSystem {
   private p1CloudCount: number = 0;
   private nextSpawnAt: number;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, itemRateMultiplier: number = 1) {
     this.scene = scene;
-    this.nextSpawnAt = 3;
+    this.itemRateMultiplier = itemRateMultiplier;
+    this.nextSpawnAt = Math.round(3 * this.itemRateMultiplier);
   }
 
   get attachedCloudId(): string | null { return this.attachedCloud?.id ?? null; }
@@ -101,10 +103,10 @@ export class TimeBoostItemSystem {
   }
 
   private scheduleNext(): void {
-    const interval = Phaser.Math.Between(
+    const interval = Math.round(Phaser.Math.Between(
       ITEM_CONFIG.TIME_BOOST_ITEM_SPAWN_MIN,
       ITEM_CONFIG.TIME_BOOST_ITEM_SPAWN_MAX,
-    );
-    this.nextSpawnAt = this.p1CloudCount + interval;
+    ) * this.itemRateMultiplier);
+    this.nextSpawnAt = this.p1CloudCount + Math.max(1, interval);
   }
 }

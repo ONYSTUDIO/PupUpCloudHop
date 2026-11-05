@@ -78,6 +78,13 @@ export interface SaveData {
   weeklyDailyMissionDaysCompleted: number;   // 이번 주 일일 미션 전체 완료한 날 수
   weeklyItemPickupCount: number;             // 이번 주 아이템 누적 획득 수
   weeklyMissionClaimed: string[];            // 이번 주 수령한 주간 미션 ID 목록
+
+  // ─── 영구 업그레이드 ──────────────────────────────────────
+  upgrades: {
+    rocketLevel: number;   // 0=미구매, 1=1단계, 2=2단계(MAX)
+    itemRateLevel: number; // 0=미구매, 1=1단계, 2=2단계(MAX)
+    shieldLevel: number;   // 0=미구매, 1=1단계(MAX)
+  };
 }
 
 export type SceneKey = 'BootScene' | 'PreloadScene' | 'TitleScene' | 'GameScene' | 'ResultScene' | 'ShopScene' | 'RouletteScene';

@@ -4,6 +4,7 @@ import { DEPTH, ITEM_CONFIG } from '@config/constants';
 
 export class MagnetItemSystem {
   private scene: Phaser.Scene;
+  private itemRateMultiplier: number;
 
   private attachedCloud: CloudIsland | null = null;
   private magnetImage: Phaser.GameObjects.Image | null = null;
@@ -13,12 +14,13 @@ export class MagnetItemSystem {
   private p1CloudCount: number = 0;
   private nextSpawnAt: number;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, itemRateMultiplier: number = 1) {
     this.scene = scene;
-    this.nextSpawnAt = Phaser.Math.Between(
+    this.itemRateMultiplier = itemRateMultiplier;
+    this.nextSpawnAt = Math.round(Phaser.Math.Between(
       ITEM_CONFIG.MAGNET_ITEM_SPAWN_MIN,
       ITEM_CONFIG.MAGNET_ITEM_SPAWN_MAX,
-    );
+    ) * this.itemRateMultiplier);
   }
 
   /**
@@ -104,11 +106,11 @@ export class MagnetItemSystem {
   }
 
   private scheduleNext(): void {
-    const interval = Phaser.Math.Between(
+    const interval = Math.round(Phaser.Math.Between(
       ITEM_CONFIG.MAGNET_ITEM_SPAWN_MIN,
       ITEM_CONFIG.MAGNET_ITEM_SPAWN_MAX,
-    );
-    this.nextSpawnAt = this.p1CloudCount + interval;
+    ) * this.itemRateMultiplier);
+    this.nextSpawnAt = this.p1CloudCount + Math.max(1, interval);
   }
 
 }

@@ -4,6 +4,7 @@ import { DEPTH, ITEM_CONFIG } from '@config/constants';
 
 export class TimeSlowItemSystem {
   private scene: Phaser.Scene;
+  private itemRateMultiplier: number;
 
   private attachedCloud: CloudIsland | null = null;
   private itemImage: Phaser.GameObjects.Image | null = null;
@@ -13,9 +14,10 @@ export class TimeSlowItemSystem {
   private p1CloudCount: number = 0;
   private nextSpawnAt: number;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, itemRateMultiplier: number = 1) {
     this.scene = scene;
-    this.nextSpawnAt = 4; // 첫 등장은 4번째 구름, 이후 scheduleNext()로 5~10 간격
+    this.itemRateMultiplier = itemRateMultiplier;
+    this.nextSpawnAt = Math.round(4 * this.itemRateMultiplier); // 첫 등장, 이후 scheduleNext()로 5~10 간격
   }
 
   get attachedCloudId(): string | null { return this.attachedCloud?.id ?? null; }
@@ -109,11 +111,11 @@ export class TimeSlowItemSystem {
   }
 
   private scheduleNext(): void {
-    const interval = Phaser.Math.Between(
+    const interval = Math.round(Phaser.Math.Between(
       ITEM_CONFIG.TIME_SLOW_ITEM_SPAWN_MIN,
       ITEM_CONFIG.TIME_SLOW_ITEM_SPAWN_MAX,
-    );
-    this.nextSpawnAt = this.p1CloudCount + interval;
+    ) * this.itemRateMultiplier);
+    this.nextSpawnAt = this.p1CloudCount + Math.max(1, interval);
   }
 
 }

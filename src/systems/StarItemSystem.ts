@@ -4,6 +4,7 @@ import { DEPTH, ITEM_CONFIG } from '@config/constants';
 
 export class StarItemSystem {
   private scene: Phaser.Scene;
+  private spawnEveryNClouds: number;
 
   private attachedCloud: CloudIsland | null = null;
 
@@ -15,8 +16,10 @@ export class StarItemSystem {
   // 패턴1 구름 카운터 (패턴2 제외)
   private p1CloudCount: number = 0;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, itemRateMultiplier: number = 1) {
     this.scene = scene;
+    // 간격 감소율 적용 (최소 1 보장)
+    this.spawnEveryNClouds = Math.max(1, Math.round(ITEM_CONFIG.STAR_SPAWN_EVERY_N_CLOUDS * itemRateMultiplier));
   }
 
   /**
@@ -25,7 +28,7 @@ export class StarItemSystem {
    */
   onPattern1CloudSpawned(cloud: CloudIsland): void {
     this.p1CloudCount++;
-    if (!this.starActive && this.p1CloudCount % ITEM_CONFIG.STAR_SPAWN_EVERY_N_CLOUDS === 0) {
+    if (!this.starActive && this.p1CloudCount % this.spawnEveryNClouds === 0) {
       this.attachToCloud(cloud);
     }
   }

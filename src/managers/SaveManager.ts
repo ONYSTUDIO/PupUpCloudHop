@@ -1,5 +1,5 @@
 import type { SaveData } from '@game-types/game';
-import { STORAGE_KEYS } from '@config/constants';
+import { STORAGE_KEYS, UPGRADE_CONFIG } from '@config/constants';
 import { DAILY_MISSIONS, WEEKLY_MISSIONS } from '@config/missions';
 
 /**
@@ -63,6 +63,8 @@ const DEFAULT_SAVE: SaveData = {
   weeklyDailyMissionDaysCompleted: 0,
   weeklyItemPickupCount: 0,
   weeklyMissionClaimed: [],
+  // 영구 업그레이드
+  upgrades: { rocketLevel: 0, itemRateLevel: 0, shieldLevel: 0 },
 };
 
 export class SaveManager {
@@ -76,6 +78,7 @@ export class SaveManager {
 
   getBestScore(): number    { return this.data.bestScore; }
   getBestLandings(): number { return this.data.bestLandings; }
+  getTotalJumps(): number   { return this.data.totalJumps; }
   isSoundEnabled(): boolean { return this.data.soundEnabled; }
   isVibrationEnabled(): boolean { return this.data.vibrationEnabled; }
 
@@ -230,6 +233,72 @@ export class SaveManager {
   }
 
   // ─────────────────────────────────────────────────────────────
+
+  // ─── 영구 업그레이드 ──────────────────────────────────────────────
+
+  getUpgrades(): { rocketLevel: number; itemRateLevel: number; shieldLevel: number } {
+    return this.data.upgrades ?? { rocketLevel: 0, itemRateLevel: 0, shieldLevel: 0 };
+  }
+
+  /**
+   * 영구 업그레이드 구매.
+   * - 해금 조건 미충족, 이미 MAX, 재화 부족 시 false 반환.
+   * - 성공 시 코인 + 조각 차감, 단계 증가 후 persist() 호출, true 반환.
+   */
+  purchaseUpgrade(type: 'rocket' | 'itemRate' | 'shield'): boolean {
+    const upgrades = this.data.upgrades ?? { rocketLevel: 0, itemRateLevel: 0, shieldLevel: 0 };
+
+    if (type === 'rocket') {
+      const level = upgrades.rocketLevel;
+      if (level >= UPGRADE_CONFIG.ROCKET.MAX_LEVEL) return false;
+      // 해금 조건: none (항상 해금)
+      const cost = UPGRADE_CONFIG.ROCKET.COSTS[level];
+      if (!cost) return false;
+      if (this.data.coins < cost.coins) return false;
+      if ((this.data.fragments ?? 0) < cost.fragments) return false;
+      this.data.coins -= cost.coins;
+      this.data.fragments = (this.data.fragments ?? 0) - cost.fragments;
+      this.data.upgrades = { ...upgrades, rocketLevel: level + 1 };
+      this.persist();
+      return true;
+    }
+
+    if (type === 'itemRate') {
+      const level = upgrades.itemRateLevel;
+      if (level >= UPGRADE_CONFIG.ITEM_RATE.MAX_LEVEL) return false;
+      // 해금 조건: 누적 점프 100회
+      if (this.data.totalJumps < 100) return false;
+      const cost = UPGRADE_CONFIG.ITEM_RATE.COSTS[level];
+      if (!cost) return false;
+      if (this.data.coins < cost.coins) return false;
+      if ((this.data.fragments ?? 0) < cost.fragments) return false;
+      this.data.coins -= cost.coins;
+      this.data.fragments = (this.data.fragments ?? 0) - cost.fragments;
+      this.data.upgrades = { ...upgrades, itemRateLevel: level + 1 };
+      this.persist();
+      return true;
+    }
+
+    if (type === 'shield') {
+      const level = upgrades.shieldLevel;
+      if (level >= UPGRADE_CONFIG.SHIELD.MAX_LEVEL) return false;
+      // 해금 조건: 최고 점수 60점
+      if (this.data.bestScore < 60) return false;
+      const cost = UPGRADE_CONFIG.SHIELD.COSTS[level];
+      if (!cost) return false;
+      if (this.data.coins < cost.coins) return false;
+      if ((this.data.fragments ?? 0) < cost.fragments) return false;
+      this.data.coins -= cost.coins;
+      this.data.fragments = (this.data.fragments ?? 0) - cost.fragments;
+      this.data.upgrades = { ...upgrades, shieldLevel: level + 1 };
+      this.persist();
+      return true;
+    }
+
+    return false;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
 
   /** 다이아몬드 1개 = 코인 150개, 단방향 교환 */
   exchangeDiamondsToCoins(diamondAmount: number): boolean {
