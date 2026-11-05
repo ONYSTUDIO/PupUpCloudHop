@@ -388,6 +388,9 @@ export class MainScene extends Phaser.Scene {
           this.saveManager.getDiamonds(),
         );
       },
+      () => {
+        this.scene.launch(SCENE_KEYS.SHOP, { from: SCENE_KEYS.MAIN, tab: 'currency' });
+      },
     );
     this.upgradePopup.open();
   }

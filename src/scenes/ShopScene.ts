@@ -46,7 +46,7 @@ const TABS: TabDef[] = [
 
 // ─── 아이템 타입 ───────────────────────────────────────────────
 type CurrencyType = 'free' | 'coin' | 'diamond' | 'iap';
-type CardCategory = 'default' | 'diamond_pkg' | 'coin_pkg' | 'exchange' | 'misc';
+type CardCategory = 'default' | 'diamond_pkg' | 'coin_pkg' | 'frag_pkg' | 'exchange' | 'misc';
 
 interface ShopItem {
   id: string;
@@ -99,6 +99,10 @@ const CURRENCY_ITEMS: ShopItem[] = [
   { id: 'coin_s', name: '코인 소',   desc: '🪙 300개',                  icon: '🪙', price: '$0.99', currency: 'iap', category: 'coin_pkg' },
   { id: 'coin_m', name: '코인 중',   desc: '🪙 800개 (+60 보너스)',     icon: '🪙', price: '$1.99', currency: 'iap', category: 'coin_pkg' },
   { id: 'coin_l', name: '코인 대',   desc: '🪙 2,000개 (+300 보너스)', icon: '🪙', price: '$4.99', currency: 'iap', category: 'coin_pkg' },
+  // 🧩 조각 패키지 (IAP)
+  { id: 'frag_s', name: '조각 소',   desc: '🧩 30개',                        icon: '🧩', price: '$0.99', currency: 'iap', category: 'frag_pkg' },
+  { id: 'frag_m', name: '조각 중',   desc: '🧩 90개 (+10 보너스)',           icon: '🧩', price: '$1.99', currency: 'iap', category: 'frag_pkg' },
+  { id: 'frag_l', name: '조각 대',   desc: '🧩 230개 (+30 보너스)',          icon: '🧩', price: '$4.99', currency: 'iap', category: 'frag_pkg' },
   // 💱 다이아 → 코인 교환
   { id: 'dia_exchange', name: '💎 → 🪙 교환', desc: '다이아몬드 1개를 코인 150개로 교환', icon: '🔄', price: 1, currency: 'diamond', category: 'exchange' },
   // 기타 IAP
@@ -117,6 +121,7 @@ const TAB_ITEMS: Record<Exclude<TabKey, 'upgrade'>, ShopItem[]> = {
 
 interface ShopSceneData {
   from?: string;
+  tab?: TabKey;
 }
 
 export class ShopScene extends Phaser.Scene {
@@ -132,12 +137,22 @@ export class ShopScene extends Phaser.Scene {
   private diamondText!: Phaser.GameObjects.Text;
   private fragmentsText!: Phaser.GameObjects.Text;
 
+  // ─── 스크롤 상태 ──────────────────────────────────────────────
+  private scrollY: number = 0;
+  private maxScrollY: number = 0;
+  private dragStartY: number = 0;
+  private dragStartScroll: number = 0;
+  private isDragging: boolean = false;
+  private dragMoved: boolean = false;
+  private contentMask!: Phaser.Display.Masks.GeometryMask;
+
   constructor() {
     super({ key: SCENE_KEYS.SHOP });
   }
 
   init(data: ShopSceneData): void {
     this.fromScene = data?.from ?? SCENE_KEYS.TITLE;
+    if (data?.tab) this.activeTab = data.tab;
   }
 
   create(): void {
@@ -146,10 +161,22 @@ export class ShopScene extends Phaser.Scene {
     this.drawHeader();
     this.drawTabBar();
     this.contentContainer = this.add.container(0, CONTENT_Y);
+
+    // 콘텐츠 영역 마스크 (CONTENT_Y ~ BASE_HEIGHT 만 보이도록)
+    const maskShape = this.make.graphics({ x: 0, y: 0 });
+    maskShape.fillRect(0, CONTENT_Y, BASE_WIDTH, BASE_HEIGHT - CONTENT_Y);
+    this.contentMask = maskShape.createGeometryMask();
+    this.contentContainer.setMask(this.contentMask);
+
+    this.registerScrollInput();
     this.renderTab(this.activeTab);
   }
 
   shutdown(): void {
+    this.input.off('pointerdown', this.onPointerDown, this);
+    this.input.off('pointermove', this.onPointerMove, this);
+    this.input.off('pointerup',   this.onPointerUp,   this);
+    this.contentMask?.destroy();
     this.contentContainer?.destroy();
   }
 
@@ -267,6 +294,49 @@ export class ShopScene extends Phaser.Scene {
     this.scene.resume(this.fromScene);
   }
 
+  // ─── 스크롤 ───────────────────────────────────────────────────
+
+  private registerScrollInput(): void {
+    this.input.on('pointerdown', this.onPointerDown, this);
+    this.input.on('pointermove', this.onPointerMove, this);
+    this.input.on('pointerup',   this.onPointerUp,   this);
+  }
+
+  private onPointerDown(p: Phaser.Input.Pointer): void {
+    if (p.y < CONTENT_Y) return;
+    this.isDragging    = true;
+    this.dragMoved     = false;
+    this.dragStartY    = p.y;
+    this.dragStartScroll = this.scrollY;
+  }
+
+  private onPointerMove(p: Phaser.Input.Pointer): void {
+    if (!this.isDragging || !p.isDown) return;
+    const delta = p.y - this.dragStartY;
+    if (!this.dragMoved && Math.abs(delta) >= 10) {
+      this.dragMoved = true;
+    }
+    if (this.dragMoved) {
+      this.setScroll(this.dragStartScroll - delta);
+    }
+  }
+
+  private onPointerUp(): void {
+    this.isDragging = false;
+    this.dragMoved  = false;
+  }
+
+  private setScroll(y: number): void {
+    this.scrollY = Phaser.Math.Clamp(y, 0, this.maxScrollY);
+    this.contentContainer.y = CONTENT_Y - this.scrollY;
+  }
+
+  private updateScrollBounds(contentH: number): void {
+    const visibleH = BASE_HEIGHT - CONTENT_Y;
+    this.maxScrollY = Math.max(0, contentH - visibleH + 40);
+    this.setScroll(0);
+  }
+
   // ─── 탭 바 ────────────────────────────────────────────────────
 
   private drawTabBar(): void {
@@ -328,11 +398,13 @@ export class ShopScene extends Phaser.Scene {
 
   private renderTab(key: TabKey): void {
     if (key === 'currency') {
-      this.renderCurrencyTab();
+      const h = this.renderCurrencyTab();
+      this.updateScrollBounds(h);
       return;
     }
     if (key === 'upgrade') {
-      this.renderUpgradeTab();
+      const h = this.renderUpgradeTab();
+      this.updateScrollBounds(h);
       return;
     }
 
@@ -357,11 +429,15 @@ export class ShopScene extends Phaser.Scene {
 
       this.makeCard(x, y, item, status, key);
     });
+
+    const rows = Math.ceil(items.length / 2);
+    const contentH = CARD_GAP_Y + rows * (CARD_H + CARD_GAP_Y);
+    this.updateScrollBounds(contentH);
   }
 
   // ─── 업그레이드 탭 전용 렌더 ───────────────────────────────────
 
-  private renderUpgradeTab(): void {
+  private renderUpgradeTab(): number {
     const upgrades = this.saveManager.getUpgrades();
     const coins = this.saveManager.getCoins();
     const frags = this.saveManager.getFragments();
@@ -428,6 +504,8 @@ export class ShopScene extends Phaser.Scene {
       const cardY = GAP_Y + i * (UPGRADE_CARD_H + GAP_Y);
       this.makeUpgradeCard(cardX, cardY, UPGRADE_CARD_W, UPGRADE_CARD_H, def, coins, frags);
     });
+
+    return GAP_Y + defs.length * (UPGRADE_CARD_H + GAP_Y);
   }
 
   private makeUpgradeCard(
@@ -558,12 +636,14 @@ export class ShopScene extends Phaser.Scene {
 
       hit.on('pointerover',  () => drawBtn(0.7));
       hit.on('pointerout',   () => drawBtn(1));
-      hit.on('pointerdown',  () => {
+      hit.on('pointerup',    () => {
+        if (this.dragMoved) return;
         const ok = this.saveManager.purchaseUpgrade(def.type);
         if (ok) {
           this.refreshCurrencyDisplay();
           this.contentContainer.removeAll(true);
-          this.renderUpgradeTab();
+          const h = this.renderUpgradeTab();
+          this.updateScrollBounds(h);
           this.showToast(`${def.name} 업그레이드 완료!`);
         }
       });
@@ -572,7 +652,7 @@ export class ShopScene extends Phaser.Scene {
 
   // ─── 재화 탭 전용 렌더 ─────────────────────────────────────────
 
-  private renderCurrencyTab(): void {
+  private renderCurrencyTab(): number {
     const sections: { label: string; color: number; items: ShopItem[] }[] = [
       {
         label: '💎 다이아몬드 패키지',
@@ -583,6 +663,11 @@ export class ShopScene extends Phaser.Scene {
         label: '🪙 코인 패키지',
         color: C.GOLD,
         items: CURRENCY_ITEMS.filter(i => i.category === 'coin_pkg'),
+      },
+      {
+        label: '🧩 조각 패키지',
+        color: C.PURPLE,
+        items: CURRENCY_ITEMS.filter(i => i.category === 'frag_pkg'),
       },
       {
         label: '💱 교환',
@@ -630,6 +715,8 @@ export class ShopScene extends Phaser.Scene {
       const rows = Math.ceil(section.items.length / 2);
       curY += rows * (CARD_H + CARD_GAP_Y) + 24;
     });
+
+    return curY;
   }
 
   // ─── 카드 ─────────────────────────────────────────────────────
@@ -679,6 +766,7 @@ export class ShopScene extends Phaser.Scene {
     switch (item.category) {
       case 'diamond_pkg': return C.CARD_DIA_PKG;
       case 'coin_pkg':    return C.CARD_COIN_PKG;
+      case 'frag_pkg':    return 0x1a0a2e;
       case 'exchange':    return C.CARD_EXCHANGE;
       case 'misc':        return C.CARD_MISC;
       default:
@@ -692,6 +780,7 @@ export class ShopScene extends Phaser.Scene {
     switch (item.category) {
       case 'diamond_pkg': return C.DIAMOND;
       case 'coin_pkg':    return C.GOLD;
+      case 'frag_pkg':    return C.PURPLE;
       case 'exchange':    return C.ACCENT;
       case 'misc':        return C.PURPLE;
       default:
@@ -795,7 +884,7 @@ export class ShopScene extends Phaser.Scene {
 
     hit.on('pointerover',  () => draw(0.7));
     hit.on('pointerout',   () => draw(1));
-    hit.on('pointerdown',  () => onPress());
+    hit.on('pointerup',    () => { if (!this.dragMoved) onPress(); });
   }
 
   // ─── 구매 처리 ────────────────────────────────────────────────

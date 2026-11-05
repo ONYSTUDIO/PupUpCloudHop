@@ -29,6 +29,12 @@ interface UpgradeDef {
   unlockDesc: string;
 }
 
+// 카드 하단 버튼 레이아웃
+const BTN_H         = 56;
+const BTN_UPGRADE_W = 220;
+const BTN_SHOP_W    = 180;
+const BTN_GAP       = 12;
+
 export class UpgradePopup {
   private objs: Phaser.GameObjects.GameObject[] = [];
   private destroyed = false;
@@ -37,6 +43,7 @@ export class UpgradePopup {
     private readonly scene: Phaser.Scene,
     private readonly saveManager: SaveManager,
     private readonly onClose: () => void,
+    private readonly onGoShop: () => void = () => { /* noop */ },
   ) {}
 
   // ─── 공개 메서드 ──────────────────────────────────────────────
@@ -312,20 +319,23 @@ export class UpgradePopup {
     }
 
     if (!def.unlockMet) {
+      // 잠금 설명 텍스트
       this.reg(
         scene.add
           .text(CARD_L + 130, bottomY, `🔒 ${def.unlockDesc}`, {
             fontSize: '26px', color: '#888888',
-            wordWrap: { width: CARD_W - 150 },
+            wordWrap: { width: CARD_W - BTN_SHOP_W - BTN_GAP - 160 },
           })
           .setOrigin(0, 0.5)
           .setScrollFactor(0)
           .setDepth(DEPTH.POPUP),
       );
+      // 잠금 상태에서도 구매 버튼(상점 이동)은 항상 표시
+      this.makeShopBtn(bottomY);
       return;
     }
 
-    // 비용 + 구매 버튼
+    // 비용 + 버튼 2종
     const costArr = (
       def.type === 'rocket'
         ? UPGRADE_CONFIG.ROCKET.COSTS
@@ -351,7 +361,8 @@ export class UpgradePopup {
         .setDepth(DEPTH.POPUP),
     );
 
-    this.makePurchaseBtn(bottomY, def, canAfford);
+    this.makeShopBtn(bottomY);
+    this.makeUpgradeBtn(bottomY, def, canAfford);
   }
 
   // ─── MAX 뱃지 ─────────────────────────────────────────────────
@@ -378,43 +389,43 @@ export class UpgradePopup {
     );
   }
 
-  // ─── 구매 버튼 ───────────────────────────────────────────────
+  // ─── 업그레이드 버튼 (우측) ──────────────────────────────────
 
-  private makePurchaseBtn(
+  private makeUpgradeBtn(
     centerY: number,
     def: UpgradeDef,
     canAfford: boolean,
   ): void {
-    const scene  = this.scene;
-    const btnW   = 230;
-    const btnH   = 56;
-    const btnX   = CARD_L + CARD_W - 24 - btnW;
-    const fill   = canAfford ? 0x4fc3f7 : 0x444466;
+    const scene = this.scene;
+    const btnX  = CARD_L + CARD_W - 24 - BTN_UPGRADE_W;
+    const fill  = canAfford ? 0x4fc3f7 : 0x444466;
+    const alpha = canAfford ? 1 : 0.4;
 
     const btnBg = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPUP);
-    const drawBtn = (alpha: number): void => {
+    const drawBtn = (a: number): void => {
       btnBg.clear();
-      btnBg.fillStyle(fill, alpha);
-      btnBg.fillRoundedRect(btnX, centerY - btnH / 2, btnW, btnH, 28);
+      btnBg.fillStyle(fill, a);
+      btnBg.fillRoundedRect(btnX, centerY - BTN_H / 2, BTN_UPGRADE_W, BTN_H, 28);
     };
-    drawBtn(1);
+    drawBtn(alpha);
     this.reg(btnBg);
 
     this.reg(
       scene.add
-        .text(btnX + btnW / 2, centerY, '구매', {
-          fontSize: '30px', fontStyle: 'bold',
+        .text(btnX + BTN_UPGRADE_W / 2, centerY, '업그레이드', {
+          fontSize: '28px', fontStyle: 'bold',
           color: canAfford ? '#0d0d1a' : '#666688',
         })
         .setOrigin(0.5)
         .setScrollFactor(0)
-        .setDepth(DEPTH.POPUP),
+        .setDepth(DEPTH.POPUP)
+        .setAlpha(alpha),
     );
 
     if (!canAfford) return;
 
     const hit = scene.add
-      .rectangle(btnX + btnW / 2, centerY, btnW, btnH, 0, 0)
+      .rectangle(btnX + BTN_UPGRADE_W / 2, centerY, BTN_UPGRADE_W, BTN_H, 0, 0)
       .setScrollFactor(0)
       .setDepth(DEPTH.POPUP)
       .setInteractive({ useHandCursor: true });
@@ -428,6 +439,49 @@ export class UpgradePopup {
       if (ok) {
         this.refreshCards();
       }
+    });
+  }
+
+  // ─── 구매(상점 이동) 버튼 (업그레이드 버튼 왼쪽) ─────────────
+
+  private makeShopBtn(centerY: number): void {
+    const scene = this.scene;
+    const btnX  = CARD_L + CARD_W - 24 - BTN_UPGRADE_W - BTN_GAP - BTN_SHOP_W;
+
+    const btnBg = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.POPUP);
+    const drawBtn = (alpha: number): void => {
+      btnBg.clear();
+      btnBg.fillStyle(0x2a4a66, alpha);
+      btnBg.fillRoundedRect(btnX, centerY - BTN_H / 2, BTN_SHOP_W, BTN_H, 28);
+      btnBg.lineStyle(2, 0x4fc3f7, 0.6);
+      btnBg.strokeRoundedRect(btnX, centerY - BTN_H / 2, BTN_SHOP_W, BTN_H, 28);
+    };
+    drawBtn(1);
+    this.reg(btnBg);
+
+    this.reg(
+      scene.add
+        .text(btnX + BTN_SHOP_W / 2, centerY, '구매', {
+          fontSize: '28px', fontStyle: 'bold', color: '#ffffff',
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(DEPTH.POPUP),
+    );
+
+    const hit = scene.add
+      .rectangle(btnX + BTN_SHOP_W / 2, centerY, BTN_SHOP_W, BTN_H, 0, 0)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.POPUP)
+      .setInteractive({ useHandCursor: true });
+    this.reg(hit);
+
+    hit.on('pointerover',  () => drawBtn(0.7));
+    hit.on('pointerout',   () => drawBtn(1));
+    hit.on('pointerdown',  () => {
+      if (this.destroyed) return;
+      this.destroy();
+      this.onGoShop();
     });
   }
 
