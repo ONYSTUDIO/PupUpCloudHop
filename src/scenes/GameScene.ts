@@ -282,7 +282,7 @@ export class GameScene extends Phaser.Scene {
 
     this.chargeIndicator = this.add.graphics().setDepth(DEPTH.PLAYER + 1);
     this.directionArrow = this.add.image(0, 0, 'jump_arrow')
-      .setOrigin(0.5, 0.69)
+      .setOrigin(0.5, 1.0)
       .setDisplaySize(300, 300)
       .setDepth(DEPTH.PLAYER + 1)
       .setVisible(false);
@@ -1238,7 +1238,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.directionArrow
-      .setPosition(this.player.x, this.player.y - 100)
+      .setPosition(this.player.x, this.player.y - 60)
       .setRotation(this.directionWheel.angle + Math.PI / 2)
       .setVisible(true);
   }
