@@ -218,12 +218,17 @@ export class SpawnSystem {
     });
 
     // sprite bounds 기준 겹침 방지: 이전 구름 풍선 하단 ~ 다음 구름 이미지 상단 간격 보장
+    // 폭이 CLOUD_WIDTH_GAP_BASE 초과할수록 추가 세로 간격 부여 (큰 구름 연속 시 여유 확보)
+    const widthGapBonus = Math.max(0,
+      (width - SPAWN_CONFIG.CLOUD_WIDTH_GAP_BASE) * SPAWN_CONFIG.CLOUD_WIDTH_GAP_FACTOR,
+    );
     this.nextSpawnY -= SPAWN_CONFIG.CLOUD_SAFE_VISUAL_BOTTOM
       + SPAWN_CONFIG.CLOUD_SAFE_VISUAL_TOP
       + Phaser.Math.Between(
         SPAWN_CONFIG.CLOUD_VERTICAL_GAP_MIN,
         SPAWN_CONFIG.CLOUD_VERTICAL_GAP_MAX,
-      );
+      )
+      + widthGapBonus;
     this.generatedPatternCount++;
     this._lastP1CenterX = centerX;
     this._lastP1Width   = width;

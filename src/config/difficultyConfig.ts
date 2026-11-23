@@ -121,7 +121,7 @@ const D0: DifficultyParams = {
   orbitRadiusYMin:       14,              // 34  × 0.4
   orbitRadiusYMax:       24,              // 60  × 0.4
   cloudWidthMin:         338,             // 270 × 1.25
-  cloudWidthMax:         450,             // 360 × 1.25
+  cloudWidthMax:         380,             // 최대폭 축소 (450 → 380)
   landToleranceY:        42,              // 28 × 1.5
   landToleranceX:        6,               // 고정
   birdSpawnIntervalMin:  8_000,           // 해금 전 미사용 — 현재값과 동일

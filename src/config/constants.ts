@@ -106,7 +106,12 @@ export const SPAWN_CONFIG = {
   VORTEX_SPEED_REF_RY: 160,
   // 패턴 2 진입 추가 Y 간격 고정 분 (실제 간격 = radiusY + this, px)
   PATTERN_2_ENTRY_EXTRA_BASE: 30,
+  // 폭 비례 간격 보정 — 이 폭(px) 초과분에 계수를 곱해 P1 세로 간격에 추가
+  // 초과 1px당 0.8px 추가. 예: 380px → (380-300)×0.8 = +64px
+  CLOUD_WIDTH_GAP_BASE:   300,
+  CLOUD_WIDTH_GAP_FACTOR: 0.8,
 } as const;
+
 
 // 장애물 설정
 export const OBSTACLE_CONFIG = {
@@ -234,7 +239,7 @@ export function buildInitialLayout(): CloudIslandConfig[] {
     const orbitRadiusX = _ri(38, 66);
     const orbitRadiusY = _ri(14, 24);
     const orbitSpeed   = 0.275 + Math.random() * 0.275;
-    const width        = _ri(338, 450);
+    const width        = _ri(338, 380);
 
     const margin = orbitRadiusX + width / 2 + 30;
     const lo     = Math.ceil(margin);
