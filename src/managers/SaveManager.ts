@@ -35,7 +35,6 @@ const DEFAULT_SAVE: SaveData = {
   totalJumps: 0,
   gamesPlayed: 0,
   soundEnabled: true,
-  vibrationEnabled: true,
   coins: 0,
   diamonds: 0,
   ownedSkins: ['dog_default'],
@@ -80,7 +79,6 @@ export class SaveManager {
   getBestLandings(): number { return this.data.bestLandings; }
   getTotalJumps(): number   { return this.data.totalJumps; }
   isSoundEnabled(): boolean { return this.data.soundEnabled; }
-  isVibrationEnabled(): boolean { return this.data.vibrationEnabled; }
 
   getCoins(): number { return this.data.coins; }
   getDiamonds(): number { return this.data.diamonds; }
@@ -323,11 +321,6 @@ export class SaveManager {
 
   setSoundEnabled(enabled: boolean): void {
     this.data.soundEnabled = enabled;
-    this.persist();
-  }
-
-  setVibrationEnabled(enabled: boolean): void {
-    this.data.vibrationEnabled = enabled;
     this.persist();
   }
 

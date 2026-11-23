@@ -13,22 +13,17 @@ export class PausePopup {
   private destroyed: boolean = false;
 
   private soundEnabled: boolean;
-  private vibrationEnabled: boolean;
   private soundBtn!: Phaser.GameObjects.Text;
-  private vibrationBtn!: Phaser.GameObjects.Text;
 
   constructor(
     scene: Phaser.Scene,
     soundEnabled: boolean,
-    vibrationEnabled: boolean,
     onRetry: () => void,
     onGoMain: () => void,
     onResume: () => void,
     onSoundChange: (enabled: boolean) => void,
-    onVibrationChange: (enabled: boolean) => void,
   ) {
     this.soundEnabled = soundEnabled;
-    this.vibrationEnabled = vibrationEnabled;
 
     // ─── 전체화면 dim overlay ─────────────────────────────────
     this.reg(
@@ -110,25 +105,6 @@ export class PausePopup {
       onSoundChange(this.soundEnabled);
     });
     this.reg(this.soundBtn);
-
-    // ─── 진동 토글 ────────────────────────────────────────────
-    this.reg(
-      scene.add
-        .text(CX - 80, CY + 350, '진동', {
-          fontSize: '46px', color: '#003399',
-        })
-        .setOrigin(1, 0.5)
-        .setScrollFactor(0)
-        .setDepth(DEPTH.POPUP),
-    );
-
-    this.vibrationBtn = this.makeToggleBtn(scene, CX + 120, CY + 350, this.vibrationEnabled, () => {
-      if (this.destroyed) return;
-      this.vibrationEnabled = !this.vibrationEnabled;
-      this.refreshToggle(this.vibrationBtn, this.vibrationEnabled);
-      onVibrationChange(this.vibrationEnabled);
-    });
-    this.reg(this.vibrationBtn);
   }
 
   destroy(): void {

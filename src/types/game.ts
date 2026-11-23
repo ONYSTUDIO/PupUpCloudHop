@@ -47,7 +47,6 @@ export interface SaveData {
   totalJumps: number;
   gamesPlayed: number;
   soundEnabled: boolean;
-  vibrationEnabled: boolean;
   coins: number;
   diamonds: number;
   ownedSkins: string[];

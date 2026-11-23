@@ -18,10 +18,8 @@ import { TimeSlowSystem } from '@systems/TimeSlowSystem';
 import { TimeBoostItemSystem } from '@systems/TimeBoostItemSystem';
 import { TimeBoostSystem } from '@systems/TimeBoostSystem';
 import { AudioManager } from '@managers/AudioManager';
-import { HapticsManager } from '@managers/HapticsManager';
 import { InputManager } from '@managers/InputManager';
 import { SaveManager } from '@managers/SaveManager';
-import { HAPTICS_CONFIG } from '@config/hapticsConfig';
 import { authService } from '../services/AuthService';
 import { profileService } from '@services/ProfileService';
 import { TopHud } from '@ui/TopHud';
@@ -69,8 +67,6 @@ export class GameScene extends Phaser.Scene {
 
   // 매니저 / UI
   private audioManager!: AudioManager;
-  private hapticsManager!: HapticsManager;
-  private landingShake: boolean = false;
   private inputManager!: InputManager;
   private saveManager!: SaveManager;
   private topHud!: TopHud;
@@ -158,9 +154,8 @@ export class GameScene extends Phaser.Scene {
     super({ key: SCENE_KEYS.GAME });
   }
 
-  create(data?: { pattern?: JumpPatternType; startWithShield?: boolean; startWithMagnet?: boolean; showGuideLines?: boolean; landingShake?: boolean }): void {
+  create(data?: { pattern?: JumpPatternType; startWithShield?: boolean; startWithMagnet?: boolean; showGuideLines?: boolean }): void {
     this.jumpPattern = data?.pattern ?? JumpPatternType.PATTERN_3;
-    this.landingShake = data?.landingShake ?? false;
     this.isGameOver = false;
     this.isDangerSlow = false;
     this.dangerSlowElapsed = 0;
@@ -196,7 +191,6 @@ export class GameScene extends Phaser.Scene {
 
     this.saveManager = new SaveManager();
     this.audioManager = new AudioManager(this, this.saveManager.isSoundEnabled());
-    this.hapticsManager = new HapticsManager(this.saveManager.isVibrationEnabled());
     this.movementSystem = new PlatformMovementSystem();
     this.jumpSystem = new JumpSystem();
     this.collisionSystem = new CollisionSystem();
@@ -1270,7 +1264,6 @@ export class GameScene extends Phaser.Scene {
     );
 
     if (jumped) {
-      this.hapticsManager.vibrate('JUMP');
       this.idleAnimTimer = 0; // idle-anim 리셋 → corgi_left/right로 복귀
       this.jumpedFromId = this.currentCloudId;
       this.jumpTime = this.time.now;
@@ -1339,11 +1332,6 @@ export class GameScene extends Phaser.Scene {
       profileService.addFragments(1).catch(() => { /* 낙관적 업데이트, 실패 무시 */ });
       this.startRocketMode();
       return;
-    }
-
-    // 카메라 흔들림 — 로켓 모드 착지 제외
-    if (this.landingShake && cloud.id !== prevId) {
-      this.cameras.main.shake(HAPTICS_CONFIG.LANDING_SHAKE.duration, HAPTICS_CONFIG.LANDING_SHAKE.intensity);
     }
 
     // 자석 아이템 수집 — 자석 효과 활성화
@@ -1459,10 +1447,9 @@ export class GameScene extends Phaser.Scene {
       this.pausePopup = new PausePopup(
         this,
         this.saveManager.isSoundEnabled(),
-        this.saveManager.isVibrationEnabled(),
         () => {
           // 다시하기
-          this.scene.start(SCENE_KEYS.GAME, { pattern: this.jumpPattern, landingShake: this.landingShake });
+          this.scene.start(SCENE_KEYS.GAME, { pattern: this.jumpPattern });
         },
         () => {
           // 메인으로
@@ -1481,10 +1468,6 @@ export class GameScene extends Phaser.Scene {
         (enabled: boolean) => {
           this.saveManager.setSoundEnabled(enabled);
           this.audioManager.setSoundEnabled(enabled);
-        },
-        (enabled: boolean) => {
-          this.saveManager.setVibrationEnabled(enabled);
-          this.hapticsManager.setEnabled(enabled);
         },
       );
     } else {
@@ -1524,7 +1507,6 @@ export class GameScene extends Phaser.Scene {
                           this.jumpPattern === JumpPatternType.PATTERN_2;
     if (isDragPattern) this.directionWheel.disable();
 
-    this.hapticsManager.vibrate('GAME_OVER');
     this.events.emit(EVENTS.GAME_OVER);
 
     // fly-anim(비행 중) → 게임오버 확정: 상태 고정 (이미지·회전은 유지)
