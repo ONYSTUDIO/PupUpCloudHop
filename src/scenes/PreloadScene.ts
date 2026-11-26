@@ -56,6 +56,10 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image('item_time_slow',   'assets/images/items/item_time_slow.png');
     this.load.image('item_time_boost',  'assets/images/items/item_time_boost.png');
 
+    this.load.image('effect_landing_01', 'assets/images/effects/ingame/effect_landing_cloud_01.png');
+    this.load.image('effect_landing_02', 'assets/images/effects/ingame/effect_landing_cloud_02.png');
+    this.load.image('effect_landing_03', 'assets/images/effects/ingame/effect_landing_cloud_03.png');
+
     this.load.image('jump_arrow',           'assets/images/ui/ingame/jump_arrow.png');
     this.load.image('jump_arrow_magnet',    'assets/images/ui/ingame/jump_arrow_magnet.png');
     this.load.image('jump_arrow_freeze',    'assets/images/ui/ingame/jump_arrow_freeze.png');

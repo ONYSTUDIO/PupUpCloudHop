@@ -28,15 +28,22 @@ export const BG_CLOUD_BIG_SPEED_X   = 12; // px/s — 큰 구름(원거리), 느
 export const BG_CLOUD_SMALL_SPEED_X = 28; // px/s — 작은 구름(근거리), 빠른 속도
 
 export const DEPTH = {
-  BACKGROUND:  0,
-  DECOR_CLOUD: 1,
-  CLOUD_ISLAND: 2,
-  OBSTACLE:    5,
-  ITEM:        7,
-  PLAYER:     10,
-  EFFECT:     20,  // 파티클·이펙트
-  HUD:       100,  // 모든 UI 오버레이 (HUD, 메타 아이콘, 버튼 패널)
-  POPUP:     200,  // 팝업·모달
+  BACKGROUND:     0,
+  DECOR_CLOUD:    1,
+  CLOUD_ISLAND:   2,
+  LANDING_EFFECT: 3,  // 착지 이펙트 — 구름섬(2)과 플레이어(10) 사이
+  OBSTACLE:       5,
+  ITEM:           7,
+  PLAYER:        10,
+  EFFECT:        20,  // 파티클·이펙트
+  HUD:          100,  // 모든 UI 오버레이 (HUD, 메타 아이콘, 버튼 패널)
+  POPUP:        200,  // 팝업·모달
+} as const;
+
+export const LANDING_EFFECT_CONFIG = {
+  FRAME_MS:    120,  // 프레임당 표시 시간(ms). 3프레임 × 120ms ≈ 360ms 총 재생
+  DISPLAY_SIZE: 300, // 화면 표시 크기(px)
+  Y_OFFSET:     60,  // cloud.topY 기준 추가 하향 오프셋(px) — 캐릭터 하단(발) 위치 정렬
 } as const;
 
 // 별 아이템 / 로켓 모드 설정

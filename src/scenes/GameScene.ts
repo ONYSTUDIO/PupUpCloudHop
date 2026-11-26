@@ -29,7 +29,7 @@ import { DirectionWheel } from '@ui/DirectionWheel';
 import { ActionPanel } from '@ui/ActionPanel';
 import { MetaIconPanel } from '@ui/MetaIconPanel';
 import { JumpPatternType } from '@game-types/game';
-import { SCENE_KEYS, DEPTH, EVENTS, buildInitialLayout, ITEM_CONFIG, UPGRADE_CONFIG, BG_CLOUD_BIG_SPEED_X, BG_CLOUD_SMALL_SPEED_X } from '@config/constants';
+import { SCENE_KEYS, DEPTH, EVENTS, buildInitialLayout, ITEM_CONFIG, UPGRADE_CONFIG, BG_CLOUD_BIG_SPEED_X, BG_CLOUD_SMALL_SPEED_X, LANDING_EFFECT_CONFIG } from '@config/constants';
 import { BASE_WIDTH, BASE_HEIGHT } from '@config/gameConfig';
 import { GAMEPLAY } from '@config/gameplayConfig';
 import { UI_LAYOUT } from '@config/uiLayout';
@@ -68,6 +68,8 @@ export class GameScene extends Phaser.Scene {
   // 매니저 / UI
   private audioManager!: AudioManager;
   private inputManager!: InputManager;
+  private landingEffectSprite!: Phaser.GameObjects.Image;
+  private _landingEffectGen = 0;
   private saveManager!: SaveManager;
   private topHud!: TopHud;
   private scoreHud!: ScoreHud;
@@ -279,6 +281,11 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5, 1.0)
       .setDisplaySize(300, 300)
       .setDepth(DEPTH.PLAYER + 1)
+      .setVisible(false);
+    this.landingEffectSprite = this.add.image(0, 0, 'effect_landing_01')
+      .setOrigin(0.5, 0.75)
+      .setDisplaySize(LANDING_EFFECT_CONFIG.DISPLAY_SIZE, LANDING_EFFECT_CONFIG.DISPLAY_SIZE)
+      .setDepth(DEPTH.LANDING_EFFECT)
       .setVisible(false);
     this.rocketTrailGraphics = this.add.graphics().setDepth(DEPTH.PLAYER - 1);
 
@@ -1237,6 +1244,30 @@ export class GameScene extends Phaser.Scene {
       .setVisible(true);
   }
 
+  // ─── 착지 이펙트 ──────────────────────────────────────────
+
+  /** 착지 위치에 3프레임 애니메이션 이펙트를 재생한다. */
+  private playLandingEffect(x: number, y: number): void {
+    const gen = ++this._landingEffectGen;
+    const s = this.landingEffectSprite;
+    const ms = LANDING_EFFECT_CONFIG.FRAME_MS;
+
+    s.setPosition(x, y).setTexture('effect_landing_01').setVisible(true);
+
+    this.time.delayedCall(ms, () => {
+      if (this._landingEffectGen !== gen) return;
+      s.setTexture('effect_landing_02');
+    });
+    this.time.delayedCall(ms * 2, () => {
+      if (this._landingEffectGen !== gen) return;
+      s.setTexture('effect_landing_03');
+    });
+    this.time.delayedCall(ms * 3, () => {
+      if (this._landingEffectGen !== gen) return;
+      s.setVisible(false);
+    });
+  }
+
   // ─── JUMP 버튼 상태 갱신 ───────────────────────────────
 
   private updateJumpButton(): void {
@@ -1296,6 +1327,7 @@ export class GameScene extends Phaser.Scene {
     this.player.vy = 0;
     this.player.y = cloud.topY - this.player.HALF_H;
     this.currentCloudId = cloud.id;
+    this.playLandingEffect(this.player.x, cloud.topY + LANDING_EFFECT_CONFIG.Y_OFFSET);
 
     // 착지 후 방향: 새로 착지한 구름 → 다음 목표 구름 방향으로 idle 전환
     this.idleAnimTimer = 0;
